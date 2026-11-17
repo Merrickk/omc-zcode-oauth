@@ -1280,6 +1280,8 @@ func TestClaimPreviewToleratesVendorTyping(t *testing.T) {
 	// The vendor types numbers as numbers or strings and has shipped both a
 	// wrapped object and a bare array. Every one of these must yield the plan.
 	documents := []string{
+		`{"code":0,"msg":"ok","plans":[{"plan_id":"p1","name":"Gift","priority":"10","entitlements":[{"meter":"model_usage","unit_type":"token","show_name":"Tokens","grant_units":"1000000","period":"daily"}]}]}`,
+		`{"code":0,"data":null,"result":{"plans":[{"plan_id":"p1","name":"Gift","priority":10,"entitlements":[{"meter":"model_usage","unit_type":"token","show_name":"Tokens","grant_units":1000000,"period":"daily"}]}]}}`,
 		`{"plans":[{"plan_id":"p1","name":"Gift","priority":10,"entitlements":[{"meter":"model_usage","unit_type":"token","show_name":"Tokens","grant_units":1000000,"period":"daily"}]}]}`,
 		`{"plans":[{"planId":"p1","name":"Gift","priority":"10","entitlements":[{"meter":"model_usage","unitType":"token","showName":"Tokens","grantUnits":"1000000","period":"daily"}]}]}`,
 		`[{"plan_id":"p1","name":"Gift","priority":"10","entitlements":[{"meter":"model_usage","unit_type":"token","show_name":"Tokens","grant_units":"1000000"}]}]`,

@@ -164,11 +164,11 @@ func previewPlans(sender httpSender, c credential) ([]claimPlan, error) {
 		"app_version": {getConfig().AppVersion},
 		"platform":    {zcodePlatform()},
 	}.Encode()
-	raw, err := apiCall(sender, "GET", target, "Bearer "+c.JWT, c.Device, billingHeaders(c.JWT), nil)
+	data, body, err := apiCallEnvelope(sender, "GET", target, "Bearer "+c.JWT, c.Device, billingHeaders(c.JWT), nil)
 	if err != nil {
 		return nil, err
 	}
-	return plansFromRaw(raw)
+	return plansFromRaw(payloadOrEnvelope(data, body))
 }
 
 func plansFromRaw(raw json.RawMessage) ([]claimPlan, error) {
@@ -216,23 +216,49 @@ func plansFromRaw(raw json.RawMessage) ([]claimPlan, error) {
 	return plans, nil
 }
 
-// planEntries accepts {plans:[...]}, {data:[...]} or a bare array, and drops
-// entries that are not objects.
+// planEntries finds the claimable plans in a preview document. The payload has
+// been seen inside "data", inside "result", and at the top level, so the search
+// is structural rather than a fixed path.
 func planEntries(raw json.RawMessage) ([]map[string]json.RawMessage, error) {
-	var wrapper map[string]json.RawMessage
-	if json.Unmarshal(raw, &wrapper) == nil {
-		for _, key := range []string{"plans", "plan_list", "planList", "items", "list", "data"} {
-			if value, ok := wrapper[key]; ok {
-				if entries := objectList(value); entries != nil {
-					return entries, nil
-				}
-			}
-		}
-	}
-	if entries := objectList(raw); entries != nil {
+	if entries := planListAt(raw); entries != nil {
 		return entries, nil
 	}
 	return nil, fmt.Errorf("invalid claim preview response: %s", rawSnippet(raw))
+}
+
+// payloadOrEnvelope prefers a non-empty "data" payload and falls back to the
+// whole response when the endpoint answered without one.
+func payloadOrEnvelope(data, body json.RawMessage) json.RawMessage {
+	if text := strings.TrimSpace(string(data)); text != "" && text != "null" {
+		return data
+	}
+	return body
+}
+
+func planListAt(raw json.RawMessage) []map[string]json.RawMessage {
+	if text := strings.TrimSpace(string(raw)); text == "" || text == "null" {
+		return nil
+	}
+	if list := objectList(raw); list != nil {
+		return list
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(raw, &object) != nil {
+		return nil
+	}
+	for _, key := range []string{"plans", "plan_list", "planList", "items", "list"} {
+		if list := objectList(object[key]); list != nil {
+			return list
+		}
+	}
+	for _, key := range []string{"data", "result", "payload"} {
+		if nested, ok := object[key]; ok {
+			if list := planListAt(nested); list != nil {
+				return list
+			}
+		}
+	}
+	return nil
 }
 
 func objectList(raw json.RawMessage) []map[string]json.RawMessage {
@@ -339,11 +365,11 @@ func fetchCaptchaConfig(sender httpSender) (captchaConfig, error) {
 		"app_version": {getConfig().AppVersion},
 		"platform":    {zcodePlatform()},
 	}.Encode()
-	raw, err := apiCall(sender, "GET", target, "", "", billingHeaders(""), nil)
+	data, body, err := apiCallEnvelope(sender, "GET", target, "", "", billingHeaders(""), nil)
 	if err != nil {
 		return out, err
 	}
-	return captchaConfigFromRaw(json.RawMessage(raw))
+	return captchaConfigFromRaw(payloadOrEnvelope(data, body))
 }
 
 func captchaConfigFromRaw(raw json.RawMessage) (captchaConfig, error) {
