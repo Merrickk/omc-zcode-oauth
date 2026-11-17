@@ -53,6 +53,10 @@
   <button id="btn-activate">手动上报活跃事件</button>
   <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 领取前自动上报</label>
 </div>
+<div class="row" style="border-top:1px solid #d0d7de;padding-top:10px;margin-top:12px;">
+  <label class="hint"><input type="checkbox" id="auto-claim" style="min-width:0;flex:none"> <b>自动领取循环</b>（每 10 分钟查一次，发现套餐自动领取）</label>
+  <span id="auto-status" class="hint" style="margin-left:auto;"></span>
+</div>
 
 <h2>套餐</h2>
 <div id="plans" class="hint">尚未查询。</div>
@@ -188,7 +192,11 @@
       for (const file of zcode) {
         const option = document.createElement("option");
         option.value = String(file.name || "");
-        option.textContent = String(file.name || "") + (file.disabled ? "（已停用）" : "");
+        // Show the account identity the operator recognizes, not the internal
+        // file name. The file name stays as the value because the API needs it.
+        const account = String(file.label || file.email || file.account || "").trim();
+        const shortFile = String(file.name || "").replace(/\.json$/i, "");
+        option.textContent = (account || shortFile) + (file.disabled ? "（已停用）" : "");
         sel.appendChild(option);
       }
       sel.classList.remove("hidden");
@@ -214,70 +222,87 @@
     });
   }
 
-  async function runCaptcha(plan) {
-    const name = selectedAuth();
-    if (!name) throw new Error("请先选择或填写凭据文件名");
-    localStorage.setItem("omcZcodeClaimAuth", name);
+  // runCaptcha resolves once the claim finished, failed, or needs a human.
+  // In auto mode a failed traceless check pauses the loop instead of blocking
+  // forever on a slider the background cannot solve.
+  function runCaptcha(plan, auto) {
+    return new Promise((resolve) => {
+      const authName = selectedAuth();
+      if (!authName) { status("请先选择或填写凭据", "err"); resolve({ ok: false }); return; }
+      localStorage.setItem("omcZcodeClaimAuth", authName);
 
-    status("正在准备验证…");
-    if (!captchaCfg) {
-      captchaCfg = await call("GET", CLAIM_API + "/captcha-config");
-    }
-    if (!captchaCfg || !captchaCfg.enabled || !captchaCfg.scene_id) {
-      throw new Error("服务端未开启验证码或缺少场景配置，暂时无法领取");
-    }
-    await loadSdk();
-    window.AliyunCaptchaConfig = { region: captchaCfg.region, prefix: captchaCfg.prefix };
-
-    pendingClaim = plan;
-    submitted = false;
-
-    const finish = (param) => {
-      if (submitted) return;
-      submitted = true;
-      clearTimeout(tracelessTimer);
-      const token = typeof param === "string" ? param : (param && param.captchaVerifyParam);
-      if (!token || !String(token).trim()) {
-        status("验证回调没有返回 token，请重试。", "err");
-        return;
-      }
-      submitClaim(pendingClaim, String(token).trim());
-    };
-    const interactive = (why) => {
-      clearTimeout(tracelessTimer);
-      status("静默验证未通过，请在弹出的滑块中完成验证。" + (why ? "（" + String(why).slice(0, 120) + "）" : ""));
-    };
-
-    window.initAliyunCaptcha({
-      SceneId: captchaCfg.scene_id,
-      mode: "popup",
-      language: (navigator.language || "zh-CN").toLowerCase().startsWith("en") ? "en" : "zh-CN",
-      showErrorTip: false,
-      element: "#cap-holder",
-      button: "#cap-btn-" + plan.plan_id,
-      getInstance: (instance) => {
-        if (typeof instance.startTracelessVerification === "function") {
-          status("正在尝试静默验证…");
-          instance.startTracelessVerification();
-          tracelessTimer = setTimeout(() => interactive("timeout"), TRACELESS_TIMEOUT);
-        } else {
-          interactive();
+      (async () => {
+        status(auto ? "[自动] 正在准备验证…" : "正在准备验证…");
+        if (!captchaCfg) captchaCfg = await call("GET", CLAIM_API + "/captcha-config");
+        if (!captchaCfg || !captchaCfg.enabled || !captchaCfg.scene_id) {
+          throw new Error("服务端未开启验证码或缺少场景配置，暂时无法领取");
         }
-      },
-      success: finish,
-      fail: interactive,
-      onError: interactive,
+        await loadSdk();
+        window.AliyunCaptchaConfig = { region: captchaCfg.region, prefix: captchaCfg.prefix };
+        pendingClaim = plan;
+        submitted = false;
+
+        const finish = (param) => {
+          if (submitted) return;
+          submitted = true;
+          clearTimeout(tracelessTimer);
+          const token = typeof param === "string" ? param : (param && param.captchaVerifyParam);
+          if (!token || !String(token).trim()) {
+            status("验证回调没有返回 token，请重试。", "err");
+            resolve({ ok: false });
+            return;
+          }
+          submitClaim(plan, String(token).trim(), auto).then(resolve);
+        };
+        const interactive = (why) => {
+          clearTimeout(tracelessTimer);
+          if (auto) {
+            // A human gesture is required; the background loop cannot supply it.
+            status("[自动] 静默验证未通过，需要人工滑块验证。自动循环已暂停，请手动点“领取”。", "err");
+            stopAuto("需要人工验证，已暂停");
+            renderPlans([plan]);  // re-show the plan so the user can click it
+            resolve({ ok: false, interactive: true });
+          } else {
+            status("静默验证未通过，请在弹出的滑块中完成验证。" + (why ? "（" + String(why).slice(0, 120) + "）" : ""));
+          }
+        };
+
+        window.initAliyunCaptcha({
+          SceneId: captchaCfg.scene_id,
+          mode: "popup",
+          language: (navigator.language || "zh-CN").toLowerCase().startsWith("en") ? "en" : "zh-CN",
+          showErrorTip: false,
+          element: "#cap-holder",
+          button: "#cap-btn-" + plan.plan_id,
+          getInstance: (instance) => {
+            if (typeof instance.startTracelessVerification === "function") {
+              status(auto ? "[自动] 正在静默验证…" : "正在尝试静默验证…");
+              instance.startTracelessVerification();
+              tracelessTimer = setTimeout(() => interactive("timeout"), TRACELESS_TIMEOUT);
+            } else {
+              interactive();
+            }
+          },
+          success: finish,
+          fail: interactive,
+          onError: interactive,
+        });
+      })().catch((e) => {
+        status("❌ " + e.message, "err");
+        resolve({ ok: false });
+      });
     });
   }
 
-  async function submitClaim(plan, token) {
+  async function submitClaim(plan, token, auto) {
     const name = selectedAuth();
+    const prefix = auto ? "[自动] " : "";
     try {
       if ($("activate").checked) {
-        status("上报活跃事件…");
+        status(prefix + "上报活跃事件…");
         await call("POST", CLAIM_API + "/activate?auth=" + encodeURIComponent(name));
       }
-      status("提交领取…");
+      status(prefix + "提交领取…");
       const out = await call("POST", CLAIM_API + "/claim", {
         auth: name,
         plan_id: plan.plan_id,
@@ -285,16 +310,66 @@
         captcha_region: (captchaCfg && captchaCfg.region) || "",
       });
       const when = out.next_claim_at ? "\n下次可领取时间：" + new Date(out.next_claim_at * 1000).toLocaleString() : "";
-      status("✅ 领取成功：" + (out.plan_name || plan.name || plan.plan_id) + when, "ok");
+      status("✅ " + prefix + "领取成功：" + (out.plan_name || plan.name || plan.plan_id) + when, "ok");
       await refreshPlans();
+      return { ok: true };
     } catch (e) {
-      let text = "❌ 领取失败：" + e.message;
+      let text = "❌ " + prefix + "领取失败：" + e.message;
       if (e.outcome && e.outcome.next_claim_at) {
         text += "\n冷却中，下次可领取时间：" + new Date(e.outcome.next_claim_at * 1000).toLocaleString();
       }
       status(text, "err");
+      return { ok: false };
     } finally {
       $("btn-plans").disabled = false;
+    }
+  }
+
+  // ---- Background auto-claim loop -------------------------------------------
+  // The captcha token must be produced by the browser widget, so this loop only
+  // runs while this page is open. It polls every AUTO_INTERVAL_MS; when a plan
+  // appears it runs the same traceless-first flow. If a slider is required the
+  // loop pauses and asks for a human, since it cannot solve the puzzle itself.
+  const AUTO_INTERVAL_MS = 10 * 60 * 1000;
+  let autoTimer = 0;
+  let autoBusy = false;
+
+  function autoStatus(text) { $("auto-status").textContent = text || ""; }
+
+  function stopAuto(reason) {
+    clearTimeout(autoTimer);
+    autoTimer = 0;
+    $("auto-claim").checked = false;
+    localStorage.removeItem("omcZcodeClaimAuto");
+    autoStatus(reason || "已停止");
+  }
+
+  async function autoCycle() {
+    if (!$("auto-claim").checked || autoBusy) return;
+    autoBusy = true;
+    try {
+      const name = selectedAuth();
+      if (!name) { autoStatus("未选择凭据"); return; }
+      const out = await call("GET", CLAIM_API + "/plans?auth=" + encodeURIComponent(name));
+      const plans = out && out.plans ? out.plans : [];
+      if (!plans.length) {
+        autoStatus("无套餐，" + new Date().toLocaleTimeString() + " 检查");
+        return;
+      }
+      // Claim the highest-priority plan, one per cycle, to stay idempotent.
+      const plan = plans.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
+      renderPlans(plans);
+      autoStatus("发现套餐，尝试领取…");
+      const result = await runCaptcha(plan, true);
+      if (result && result.ok) autoStatus("领取成功，" + new Date().toLocaleTimeString());
+      else if (!result || !result.interactive) autoStatus("本次未领取，" + new Date().toLocaleTimeString());
+    } catch (e) {
+      autoStatus("检查失败：" + e.message.slice(0, 60));
+    } finally {
+      autoBusy = false;
+      if ($("auto-claim").checked) {
+        autoTimer = setTimeout(autoCycle, AUTO_INTERVAL_MS);
+      }
     }
   }
 
@@ -372,13 +447,29 @@
       $("btn-activate").disabled = false;
     }
   });
+  $("auto-claim").addEventListener("change", () => {
+    if ($("auto-claim").checked) {
+      localStorage.setItem("omcZcodeClaimAuto", "1");
+      autoStatus("已开启，立即检查…");
+      clearTimeout(autoTimer);
+      void autoCycle();
+    } else {
+      stopAuto("已停止");
+    }
+  });
   $("btn-reload").addEventListener("click", () => { void loadAuthFiles(); });
   $("auth-select").addEventListener("change", () => {
     if ($("auth-select").value) $("auth").value = $("auth-select").value;
   });
 
   resolveConnection();
-  void loadAuthFiles();
+  void loadAuthFiles().then(() => {
+    if (localStorage.getItem("omcZcodeClaimAuto") === "1") {
+      $("auto-claim").checked = true;
+      autoStatus("已恢复自动领取，立即检查…");
+      void autoCycle();
+    }
+  });
 })();
 </script>
 </body>
