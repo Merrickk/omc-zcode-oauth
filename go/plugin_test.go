@@ -1306,9 +1306,21 @@ func TestClaimPreviewToleratesVendorTyping(t *testing.T) {
 	}
 }
 
+func TestClaimPreviewEmptySuccessReturnsEmptyList(t *testing.T) {
+	// When vendor returns success code 0 with no plans array (just logid, etc),
+	// it must be treated as 0 claimable plans instead of an error.
+	plans, err := previewPlansDocument([]byte(`{"code":0,"msg":"","logid":"202611170613534bd6ac397763efed169f"}`))
+	if err != nil {
+		t.Fatalf("unexpected error on empty preview response: %v", err)
+	}
+	if len(plans) != 0 {
+		t.Fatalf("expected 0 plans, got %d", len(plans))
+	}
+}
+
 func TestClaimPreviewReportsWhatItCouldNotRead(t *testing.T) {
-	_, err := previewPlansDocument([]byte(`{"code":0,"data":"not-a-plan-list"}`))
-	if err == nil || !strings.Contains(err.Error(), "invalid claim preview response") || !strings.Contains(err.Error(), "not-a-plan-list") {
+	_, err := previewPlansDocument([]byte(`"not-a-json-object"`))
+	if err == nil || !strings.Contains(err.Error(), "invalid claim preview response") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

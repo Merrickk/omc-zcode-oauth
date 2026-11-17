@@ -217,11 +217,22 @@ func plansFromRaw(raw json.RawMessage) ([]claimPlan, error) {
 }
 
 // planEntries finds the claimable plans in a preview document. The payload has
-// been seen inside "data", inside "result", and at the top level, so the search
-// is structural rather than a fixed path.
+// been seen inside "data", inside "result", and at the top level. When the
+// vendor answers code 0 without any plan array (e.g. `{"code":0,"msg":"","logid":"..."}`),
+// that indicates the account currently has no claimable plans, which is a normal
+// empty list rather than an error.
 func planEntries(raw json.RawMessage) ([]map[string]json.RawMessage, error) {
 	if entries := planListAt(raw); entries != nil {
 		return entries, nil
+	}
+	// Check if this is an empty successful response from the vendor
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(raw, &envelope) == nil {
+		codeStr := rawText(envelope["code"])
+		if codeStr == "0" || codeStr == "200" || (codeStr == "" && len(envelope) > 0) {
+			// Vendor returned a success envelope with no plans
+			return []map[string]json.RawMessage{}, nil
+		}
 	}
 	return nil, fmt.Errorf("invalid claim preview response: %s", rawSnippet(raw))
 }

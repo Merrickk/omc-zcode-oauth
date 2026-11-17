@@ -50,7 +50,8 @@
 
 <div class="row">
   <button id="btn-plans" class="primary">查询可领取的套餐</button>
-  <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 领取前上报活跃事件</label>
+  <button id="btn-activate">手动上报活跃事件</button>
+  <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 领取前自动上报</label>
 </div>
 
 <h2>套餐</h2>
@@ -357,6 +358,20 @@
     }
   });
 
+  $("btn-activate").addEventListener("click", async () => {
+    const name = selectedAuth();
+    if (!name) { status("请先选择或填写凭据文件名", "err"); return; }
+    $("btn-activate").disabled = true;
+    try {
+      status("正在上报活跃心跳 (app_launch, app_daily_active)...");
+      await call("POST", CLAIM_API + "/activate?auth=" + encodeURIComponent(name));
+      status("活跃事件上报成功！请稍等 1-2 秒后再次点击“查询可领取的套餐”。", "ok");
+    } catch (e) {
+      status("上报失败：" + e.message, "err");
+    } finally {
+      $("btn-activate").disabled = false;
+    }
+  });
   $("btn-reload").addEventListener("click", () => { void loadAuthFiles(); });
   $("auth-select").addEventListener("change", () => {
     if ($("auth-select").value) $("auth").value = $("auth-select").value;
