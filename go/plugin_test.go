@@ -1275,3 +1275,49 @@ func TestClaimPingNeedsNoCredentialOrVendor(t *testing.T) {
 		t.Fatalf("ping must report whether the auth directory is known: %v", out)
 	}
 }
+
+func TestClaimPreviewToleratesVendorTyping(t *testing.T) {
+	// The vendor types numbers as numbers or strings and has shipped both a
+	// wrapped object and a bare array. Every one of these must yield the plan.
+	documents := []string{
+		`{"plans":[{"plan_id":"p1","name":"Gift","priority":10,"entitlements":[{"meter":"model_usage","unit_type":"token","show_name":"Tokens","grant_units":1000000,"period":"daily"}]}]}`,
+		`{"plans":[{"planId":"p1","name":"Gift","priority":"10","entitlements":[{"meter":"model_usage","unitType":"token","showName":"Tokens","grantUnits":"1000000","period":"daily"}]}]}`,
+		`[{"plan_id":"p1","name":"Gift","priority":"10","entitlements":[{"meter":"model_usage","unit_type":"token","show_name":"Tokens","grant_units":"1000000"}]}]`,
+	}
+	for index, document := range documents {
+		plans, err := previewPlansDocument([]byte(document))
+		if err != nil {
+			t.Fatalf("document %d: %v", index, err)
+		}
+		if len(plans) != 1 || plans[0].PlanID != "p1" || plans[0].Name != "Gift" {
+			t.Fatalf("document %d: plans = %+v", index, plans)
+		}
+		if plans[0].Priority != 10 {
+			t.Fatalf("document %d: priority = %d", index, plans[0].Priority)
+		}
+		if len(plans[0].GrantItems) != 1 || plans[0].GrantItems[0].Units != 1000000 {
+			t.Fatalf("document %d: grants = %+v", index, plans[0].GrantItems)
+		}
+		if plans[0].GrantItems[0].Period != "daily" && plans[0].GrantItems[0].Period != "one_time" {
+			t.Fatalf("document %d: period = %q", index, plans[0].GrantItems[0].Period)
+		}
+	}
+}
+
+func TestClaimPreviewReportsWhatItCouldNotRead(t *testing.T) {
+	_, err := previewPlansDocument([]byte(`{"code":0,"data":"not-a-plan-list"}`))
+	if err == nil || !strings.Contains(err.Error(), "invalid claim preview response") || !strings.Contains(err.Error(), "not-a-plan-list") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCaptchaConfigToleratesVendorTyping(t *testing.T) {
+	cfg, err := captchaConfigDocument([]byte(`{"configs":{"captcha":{"enabled":"true","region":"cn","prefix":"p","sceneId":"scene-1"}}}`))
+	if err != nil || !cfg.Enabled || cfg.SceneID != "scene-1" || cfg.Region != "cn" {
+		t.Fatalf("cfg = %+v err = %v", cfg, err)
+	}
+	cfg, err = captchaConfigDocument([]byte(`{"configs":{}}`))
+	if err != nil || cfg.Enabled {
+		t.Fatalf("missing captcha block must read as disabled: %+v err = %v", cfg, err)
+	}
+}

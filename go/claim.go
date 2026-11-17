@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -146,6 +148,11 @@ func osCategory() string {
 	}
 }
 
+// previewPlans lists what the account can claim. The vendor has shipped both a
+// wrapped object and a bare array here, and it types numbers as either JSON
+// numbers or strings, so every field is read through the tolerant helpers below
+// rather than a fixed struct: one mismatched field would otherwise fail the
+// whole document and hide a perfectly usable plan list.
 func previewPlans(sender httpSender, c credential) ([]claimPlan, error) {
 	if c.JWT == "" {
 		return nil, errors.New("ZCode sign-in required")
@@ -161,59 +168,169 @@ func previewPlans(sender httpSender, c credential) ([]claimPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	var doc struct {
-		Plans []struct {
-			PlanID       string `json:"plan_id"`
-			PlanIDCamel  string `json:"planId"`
-			Name         string `json:"name"`
-			Description  string `json:"description"`
-			Priority     int64  `json:"priority"`
-			Entitlements []struct {
-				Meter      string  `json:"meter"`
-				UnitType   string  `json:"unit_type"`
-				ShowName   string  `json:"show_name"`
-				GrantUnits float64 `json:"grant_units"`
-				Period     string  `json:"period"`
-			} `json:"entitlements"`
-		} `json:"plans"`
+	return plansFromRaw(raw)
+}
+
+func plansFromRaw(raw json.RawMessage) ([]claimPlan, error) {
+	entries, err := planEntries(raw)
+	if err != nil {
+		return nil, err
 	}
-	if json.Unmarshal(raw, &doc) != nil {
-		return nil, errors.New("invalid claim preview response")
-	}
-	plans := make([]claimPlan, 0, len(doc.Plans))
-	for _, p := range doc.Plans {
-		id := strings.TrimSpace(p.PlanID)
-		if id == "" {
-			id = strings.TrimSpace(p.PlanIDCamel)
-		}
+	plans := make([]claimPlan, 0, len(entries))
+	for _, entry := range entries {
+		id := firstNonEmpty(rawText(entry["plan_id"]), rawText(entry["planId"]))
 		if id == "" {
 			continue
 		}
 		plan := claimPlan{
 			PlanID:      id,
-			Name:        strings.TrimSpace(p.Name),
-			Description: strings.TrimSpace(p.Description),
-			Priority:    p.Priority,
+			Name:        rawText(entry["name"]),
+			Description: rawText(entry["description"]),
+			Priority:    rawInt(entry["priority"]),
 			GrantItems:  []claimGrant{},
 			Grants:      []string{},
 		}
-		for _, e := range p.Entitlements {
-			if e.Meter != "model_usage" || e.UnitType != "token" || strings.TrimSpace(e.ShowName) == "" {
+		for _, item := range rawList(entry["entitlements"]) {
+			if !strings.EqualFold(rawText(item["meter"]), "model_usage") {
 				continue
 			}
-			period := e.Period
+			if !strings.EqualFold(rawText(item["unit_type"]), "token") && !strings.EqualFold(rawText(item["unitType"]), "token") {
+				continue
+			}
+			name := firstNonEmpty(rawText(item["show_name"]), rawText(item["showName"]))
+			if name == "" {
+				continue
+			}
+			period := rawText(item["period"])
 			if period == "" {
 				period = "one_time"
 			}
 			plan.GrantItems = append(plan.GrantItems, claimGrant{
-				Name:   strings.TrimSpace(e.ShowName),
-				Units:  e.GrantUnits,
+				Name:   name,
+				Units:  rawFloat(firstNonNil(item["grant_units"], item["grantUnits"])),
 				Period: period,
 			})
 		}
 		plans = append(plans, plan)
 	}
 	return plans, nil
+}
+
+// planEntries accepts {plans:[...]}, {data:[...]} or a bare array, and drops
+// entries that are not objects.
+func planEntries(raw json.RawMessage) ([]map[string]json.RawMessage, error) {
+	var wrapper map[string]json.RawMessage
+	if json.Unmarshal(raw, &wrapper) == nil {
+		for _, key := range []string{"plans", "plan_list", "planList", "items", "list", "data"} {
+			if value, ok := wrapper[key]; ok {
+				if entries := objectList(value); entries != nil {
+					return entries, nil
+				}
+			}
+		}
+	}
+	if entries := objectList(raw); entries != nil {
+		return entries, nil
+	}
+	return nil, fmt.Errorf("invalid claim preview response: %s", rawSnippet(raw))
+}
+
+func objectList(raw json.RawMessage) []map[string]json.RawMessage {
+	var list []map[string]json.RawMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &list) != nil {
+		return nil
+	}
+	return list
+}
+
+func rawList(raw json.RawMessage) []map[string]json.RawMessage {
+	return objectList(raw)
+}
+
+// rawText returns a trimmed string for a JSON string, number or bool field.
+func rawText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return strings.TrimSpace(s)
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) == nil {
+		return strings.TrimSpace(n.String())
+	}
+	var b bool
+	if json.Unmarshal(raw, &b) == nil {
+		if b {
+			return "true"
+		}
+		return "false"
+	}
+	return ""
+}
+
+// rawFloat accepts a JSON number or a numeric string.
+func rawFloat(raw json.RawMessage) float64 {
+	if text := rawText(raw); text != "" {
+		if value, err := strconv.ParseFloat(text, 64); err == nil {
+			return value
+		}
+	}
+	return 0
+}
+
+func rawInt(raw json.RawMessage) int64 {
+	return int64(rawFloat(raw))
+}
+
+func rawBool(raw json.RawMessage) bool {
+	if text := rawText(raw); text != "" {
+		value, err := strconv.ParseBool(text)
+		return err == nil && value
+	}
+	return false
+}
+
+func firstNonNil(values ...json.RawMessage) json.RawMessage {
+	for _, value := range values {
+		if len(value) > 0 && string(value) != "null" {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+// rawSnippet keeps an unparsable upstream body short and on one line so the
+// caller can see what the vendor actually answered.
+func rawSnippet(raw json.RawMessage) string {
+	text := strings.Join(strings.Fields(string(raw)), " ")
+	if len(text) > 200 {
+		text = text[:200] + "…"
+	}
+	if text == "" {
+		text = "empty body"
+	}
+	return text
+}
+
+// previewPlansDocument parses one preview document; the senders below keep the
+// parsing rules testable without a fake host.
+func previewPlansDocument(raw []byte) ([]claimPlan, error) {
+	return plansFromRaw(json.RawMessage(raw))
+}
+
+func captchaConfigDocument(raw []byte) (captchaConfig, error) {
+	return captchaConfigFromRaw(json.RawMessage(raw))
 }
 
 func fetchCaptchaConfig(sender httpSender) (captchaConfig, error) {
@@ -226,24 +343,28 @@ func fetchCaptchaConfig(sender httpSender) (captchaConfig, error) {
 	if err != nil {
 		return out, err
 	}
-	var doc struct {
-		Configs struct {
-			Captcha struct {
-				Enabled bool   `json:"enabled"`
-				Region  string `json:"region"`
-				Prefix  string `json:"prefix"`
-				SceneID string `json:"sceneId"`
-			} `json:"captcha"`
-		} `json:"configs"`
-	}
+	return captchaConfigFromRaw(json.RawMessage(raw))
+}
+
+func captchaConfigFromRaw(raw json.RawMessage) (captchaConfig, error) {
+	var out captchaConfig
+	var doc map[string]json.RawMessage
 	if json.Unmarshal(raw, &doc) != nil {
-		return out, errors.New("invalid captcha configuration response")
+		return out, fmt.Errorf("invalid captcha configuration response: %s", rawSnippet(raw))
+	}
+	var configs map[string]json.RawMessage
+	_ = json.Unmarshal(doc["configs"], &configs)
+	var captcha map[string]json.RawMessage
+	_ = json.Unmarshal(configs["captcha"], &captcha)
+	if captcha == nil {
+		// A configuration without the block is a valid answer: the feature is off.
+		return out, nil
 	}
 	return captchaConfig{
-		Enabled: doc.Configs.Captcha.Enabled,
-		Region:  doc.Configs.Captcha.Region,
-		Prefix:  doc.Configs.Captcha.Prefix,
-		SceneID: doc.Configs.Captcha.SceneID,
+		Enabled: rawBool(captcha["enabled"]),
+		Region:  rawText(captcha["region"]),
+		Prefix:  rawText(captcha["prefix"]),
+		SceneID: firstNonEmpty(rawText(captcha["sceneId"]), rawText(captcha["scene_id"])),
 	}, nil
 }
 
