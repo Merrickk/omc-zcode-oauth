@@ -64,13 +64,16 @@ func TestOMCResourceRegistrationIsStaticOnly(t *testing.T) {
 	if err := json.Unmarshal(raw, &registration); err != nil {
 		t.Fatal(err)
 	}
-	if len(registration.Routes) != 0 || len(registration.Resources) != 3 {
-		t.Fatal("expected two static logos and one optional declaration")
+	if len(registration.Routes) != 4 || len(registration.Resources) != 4 {
+		t.Fatal("expected the four claim API routes, two static logos, the claim page and one optional declaration")
 	}
-	want := []string{"/zai.png", "/bigmodel.png", "/omc.json"}
+	want := []string{"/zai.png", "/bigmodel.png", "/claim.html", "/omc.json"}
+	// Only the claim page is a menu entry (a page the console can host); the
+	// logos and the descriptor stay plain passive assets.
+	wantMenu := []string{"", "", "活动领取", ""}
 	for i, route := range registration.Resources {
-		if route.Path != want[i] || route.Menu != "" {
-			t.Errorf("resource %d path=%q menu=%q, want %q with no menu", i, route.Path, route.Menu, want[i])
+		if route.Path != want[i] || route.Menu != wantMenu[i] {
+			t.Errorf("resource %d path=%q menu=%q, want %q with menu %q", i, route.Path, route.Menu, want[i], wantMenu[i])
 		}
 	}
 }

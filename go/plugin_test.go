@@ -764,7 +764,9 @@ func TestRiskResponseNeverRetriedAndBlocksOtherModels(t *testing.T) {
 	}
 }
 
-func TestLoginReportsLookupFailures(t *testing.T) {
+func TestLoginSurvivesLookupFailures(t *testing.T) {
+	// Lookup outages must degrade to a plan-less credential, not refuse the
+	// login: quota and execution re-check everything per request anyway.
 	sender := &fakeSender{reply: func(r pluginapi.HTTPRequest) (pluginapi.HTTPResponse, error) {
 		if strings.Contains(r.URL, "getCustomerInfo") {
 			return pluginapi.HTTPResponse{StatusCode: 502, Body: []byte(`{"code":502}`)}, nil
@@ -775,9 +777,12 @@ func TestLoginReportsLookupFailures(t *testing.T) {
 		t.Fatal("unexpected lookup")
 		return pluginapi.HTTPResponse{}, nil
 	}}
-	_, err := chooseCredential(sender, "bigmodel", "own", "fixture-token", "fixture-jwt", "fixture-device", "fixture-uid")
-	if err == nil || !strings.Contains(err.Error(), "customer lookup failed") || !strings.Contains(err.Error(), "gift balance lookup failed") {
-		t.Fatalf("lookup failures were misreported: %v", err)
+	c, err := chooseCredential(sender, "bigmodel", "own", "fixture-token", "fixture-jwt", "fixture-device", "fixture-uid")
+	if err != nil {
+		t.Fatalf("lookup failures must not block sign-in: %v", err)
+	}
+	if c.JWT == "" || c.Device == "" {
+		t.Fatal("plan-less login lost its identity fields")
 	}
 }
 
@@ -1075,5 +1080,145 @@ func TestParseAuthPreservesManagementFields(t *testing.T) {
 	}
 	if string(resp.Auth.StorageJSON) != string(body) {
 		t.Fatal("storage did not round-trip the auth file")
+	}
+}
+
+func TestClaimFlowManagementAPI(t *testing.T) {
+	dir := t.TempDir()
+	setAuthDir(dir)
+	c := credential{Site: "zai", JWT: "fixture.jwt.token", Device: "fixture-device", UID: "claim-uid"}
+	name := "zcode-claim-test.json"
+	if err := os.WriteFile(filepath.Join(dir, name), storage(c), 0600); err != nil {
+		t.Fatal(err)
+	}
+	planJSON := `{"plans":[{"plan_id":"p1","name":"Launch Gift","priority":5,"entitlements":[{"meter":"model_usage","unit_type":"token","show_name":"GLM-5.3","grant_units":150000,"period":"one_time"}]}]}`
+	var requests []pluginapi.HTTPRequest
+	fake := &fakeSender{reply: func(r pluginapi.HTTPRequest) (pluginapi.HTTPResponse, error) {
+		requests = append(requests, r)
+		switch {
+		case strings.Contains(r.URL, "/billing/preview"):
+			return jsonReply(planJSON), nil
+		case strings.Contains(r.URL, "/client/configs"):
+			return jsonReply(`{"configs":{"captcha":{"enabled":true,"region":"cn","prefix":"zcode","sceneId":"scene-x"}}}`), nil
+		case strings.Contains(r.URL, "/event/report"):
+			return jsonReply(`{}`), nil
+		case strings.Contains(r.URL, "/billing/claim"):
+			if r.Headers.Get("X-Aliyun-Captcha-Verify-Param") == "" {
+				return pluginapi.HTTPResponse{StatusCode: 200, Body: []byte(`{"code":3007,"msg":"captcha"}`)}, nil
+			}
+			return jsonReply(`{}`), nil
+		default:
+			t.Fatalf("unexpected claim request %s", r.URL)
+			return pluginapi.HTTPResponse{}, nil
+		}
+	}}
+	claimSender = func() httpSender { return fake }
+	t.Cleanup(func() { claimSender = func() httpSender { return cpaSender{} } })
+	call := func(method, path, query, body string) (int, map[string]any) {
+		parsed, err := url.ParseQuery(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(rpcManagement{
+			ManagementRequest: pluginapi.ManagementRequest{
+				Method: method, Path: path, Query: parsed, Body: []byte(body),
+			},
+			CallbackID: "synthetic-callback",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		value, err := handleMethod("management.handle", raw)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		resp := value.(pluginapi.ManagementResponse)
+		var out map[string]any
+		_ = json.Unmarshal(resp.Body, &out)
+		return resp.StatusCode, out
+	}
+
+	// Preview lists the claimable plan with its grants.
+	status, out := call(http.MethodGet, claimAPIPrefix+"/plans", "auth="+name, "")
+	if status != http.StatusOK || len(out["plans"].([]any)) != 1 {
+		t.Fatalf("claim preview failed: status=%d out=%v", status, out)
+	}
+	plan := out["plans"].([]any)[0].(map[string]any)
+	if plan["plan_id"] != "p1" || plan["name"] != "Launch Gift" {
+		t.Fatalf("claim preview plan mismatch: %v", plan)
+	}
+	if len(plan["grant_items"].([]any)) != 1 {
+		t.Fatalf("claim preview grants missing: %v", plan)
+	}
+
+	// Captcha config passes through.
+	status, out = call(http.MethodGet, claimAPIPrefix+"/captcha-config", "", "")
+	if status != http.StatusOK || out["scene_id"] != "scene-x" || out["enabled"] != true {
+		t.Fatalf("captcha config failed: status=%d out=%v", status, out)
+	}
+
+	// Activation reports both presence events.
+	status, _ = call(http.MethodPost, claimAPIPrefix+"/activate", "auth="+name, "")
+	if status != http.StatusOK {
+		t.Fatalf("activation failed: status=%d", status)
+	}
+	events := 0
+	for _, r := range requests {
+		if strings.Contains(r.URL, "/event/report") {
+			events++
+			var body map[string]any
+			if json.Unmarshal(r.Body, &body) != nil || body["user_id"] != "claim-uid" {
+				t.Fatalf("activation event body invalid: %s", r.Body)
+			}
+		}
+	}
+	if events != 2 {
+		t.Fatalf("expected two activation events, got %d", events)
+	}
+
+	// A claim without a captcha token is rejected before reaching upstream.
+	before := len(requests)
+	status, out = call(http.MethodPost, claimAPIPrefix+"/claim", "", `{"auth":"`+name+`","plan_id":"p1"}`)
+	if status == http.StatusOK || !strings.Contains(fmt.Sprint(out["error"]), "captcha") {
+		t.Fatalf("captcha-less claim was not rejected: status=%d out=%v", status, out)
+	}
+	if len(requests) != before {
+		t.Fatal("captcha-less claim reached upstream")
+	}
+
+	// A claim with a token succeeds.
+	status, out = call(http.MethodPost, claimAPIPrefix+"/claim", "", `{"auth":"`+name+`","plan_id":"p1","captcha_param":"token","captcha_region":"cn"}`)
+	if status != http.StatusOK || out["claimed"] != true || out["plan_id"] != "p1" {
+		t.Fatalf("claim submission failed: status=%d out=%v", status, out)
+	}
+
+	// Path traversal and foreign ids are refused.
+	for _, bad := range []string{"../secret.json", "", "other.txt.json!", "sub/dir.json"} {
+		status, _ = call(http.MethodGet, claimAPIPrefix+"/plans", "auth="+url.QueryEscape(bad), "")
+		if status == http.StatusOK {
+			t.Fatalf("invalid auth id %q was accepted", bad)
+		}
+	}
+}
+
+func TestClaimLoginNoLongerRequiresPlan(t *testing.T) {
+	// A fresh account with no plan and no gift balance still signs in.
+	sender := &fakeSender{reply: func(r pluginapi.HTTPRequest) (pluginapi.HTTPResponse, error) {
+		switch {
+		case strings.Contains(r.URL, "getCustomerInfo"):
+			return jsonReply(`{"orgs":[]}`), nil
+		case strings.Contains(r.URL, "billing/balance"):
+			return jsonReply(`{"plans":[],"balances":[]}`), nil
+		default:
+			t.Fatalf("unexpected request %s", r.URL)
+			return pluginapi.HTTPResponse{}, nil
+		}
+	}}
+	c, err := chooseCredential(sender, "bigmodel", "own", "fixture-token", "fixture-jwt", "fixture-device", "fixture-uid")
+	if err != nil {
+		t.Fatalf("plan-less sign-in refused: %v", err)
+	}
+	if c.Plan != "" {
+		t.Fatalf("plan-less sign-in invented a plan name %q", c.Plan)
 	}
 }

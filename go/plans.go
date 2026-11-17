@@ -417,6 +417,9 @@ func chooseCredential(sender httpSender, site, mode, siteToken, jwt, device, uid
 		}
 		return c, errors.New(reason)
 	}
+	// A balance lookup failure must not block sign-in either: quota reads run
+	// at fetch time, so a transient vendor outage costs a quota display, not
+	// the credential. Only a hard team-flow error still refuses the login.
 	balance, err := fetchBalance(sender, c)
 	if err == nil {
 		if name := balance.activePlanName(); name != "" {
@@ -427,14 +430,5 @@ func chooseCredential(sender httpSender, site, mode, siteToken, jwt, device, uid
 	if reason != "" && reason != "no team plan or assigned seat" {
 		return c, errors.New(reason)
 	}
-	if err != nil && lookupErr != nil {
-		return c, fmt.Errorf("%v; gift balance lookup failed: %w", lookupErr, err)
-	}
-	if lookupErr != nil {
-		return c, lookupErr
-	}
-	if err != nil {
-		return c, fmt.Errorf("gift balance lookup failed: %w", err)
-	}
-	return c, errors.New("no active GLM Coding Plan or ZCode gift plan")
+	return c, nil
 }

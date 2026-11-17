@@ -74,6 +74,118 @@ Manual layout, for the version you install:
 <plugins-dir>/windows/arm64/omc-zcode-oauth-v<version>.dll
 ```
 
+### Hosting your own plugin source
+
+A registry is one JSON file, so a fork can publish its own source next to the
+plugin and stop depending on `omc-community/omc-plugins`:
+
+```sh
+python3 .github/scripts/make-registry.py \
+  --repository https://github.com/<owner>/omc-zcode-oauth \
+  --author "<owner>" \
+  --output registry/registry.json
+```
+
+Commit the result and use its raw URL as a store source:
+
+```text
+https://raw.githubusercontent.com/<owner>/omc-zcode-oauth/main/registry/registry.json
+```
+
+Add it in Oh My CPA under Plugins → Settings → Custom sources, which writes
+`plugins.store-sources` in CPA's config, or set it directly:
+
+```yaml
+plugins:
+  enabled: true
+  store-sources:
+    - https://raw.githubusercontent.com/<owner>/omc-zcode-oauth/main/registry/registry.json
+```
+
+`registry.json` is `schema_version` 1 with `install.type: github-release`, so an
+install reads the repository's latest release. Two release assets are required
+and the existing tag workflow already produces both:
+
+- `omc-zcode-oauth_<version>_<goos>_<goarch>.zip`, one library file at the root
+- `checksums.txt`, one `<sha256>  <file>` line per asset
+
+The tag must be `v<version>`; CPA derives the plugin version from it. Nothing is
+installed without a matching checksum entry, and an archive is accepted only if
+it holds `omc-zcode-oauth.so` (or the versioned `omc-zcode-oauth-v<version>.so`)
+at its root.
+
+For a registry that needs no GitHub API access at install time, emit the
+`direct` variant instead, with each artifact pinned by digest:
+
+```sh
+python3 .github/scripts/make-registry.py \
+  --repository https://github.com/<owner>/omc-zcode-oauth --author "<owner>" \
+  --artifact linux/amd64=dist/omc-zcode-oauth_0.3.0_linux_amd64.zip \
+  --artifact darwin/arm64=dist/omc-zcode-oauth_0.3.0_darwin_arm64.zip \
+  --artifact-url https://github.com/<owner>/omc-zcode-oauth/releases/download/v0.3.0 \
+  --output registry/registry.json
+```
+
+That document is `schema_version` 2 and lists `goos`/`goarch`/`url`/`sha256` per
+platform. Both variants pass the same validation CPA applies; the script refuses
+a leading `v` in the version, a non-GitHub repository URL, a relative artifact
+URL and a malformed digest before anything is published.
+
+Two things to keep in mind when self-hosting:
+
+- **The plugin id is the file name.** CPA derives a plugin's identity from
+  `<id>-v<version>.so`, and resource routes are registered under that id, so a
+  registry entry must keep `omc-zcode-oauth`. Renaming the entry changes the id
+  CPA assigns, and the claim page and logos then register under a path the
+  console does not treat as this plugin's page. Management routes keep working
+  because they are absolute.
+- **Two sources listing one id is allowed but only one can update it.** Each
+  store entry is addressed as `<source-id>/<plugin-id>`, and an installed plugin
+  is updated only by the source it came from; a second source shows as a
+  different source and offers no update. Keep `omc-zcode-oauth` in one source, or
+  drop the OMC source from `plugins.store-sources` if you publish your own.
+
+### Installing into Oh My CPA
+
+Oh My CPA is a console over a CLIProxyAPI instance, so the plugin itself still
+lives in CPA: the console reads CPA's `GET /plugins` list and installs through
+CPA's plugin store. Two paths:
+
+**From the store (panel UI).** Sidebar → Plugins → Plugin store → *OMC ZCode
+OAuth* → Install. The registry entry in `omc-community/omc-plugins` currently
+pins the published release, so this installs that version; the console asks for
+one confirmation because the entry is published by `omc-community`.
+
+**A local build, by hand.** Put the library where CPA discovers it, declare the
+plugin in CPA's config, then restart CPA:
+
+```text
+<plugins-dir>/linux/amd64/omc-zcode-oauth-v0.3.0.so
+```
+
+```yaml
+plugins:
+  enabled: true
+  dir: /path/to/plugins
+  configs:
+    omc-zcode-oauth:
+      enabled: true
+```
+
+Both switches matter: `plugins.enabled` is the global one, and a discovered file
+with no `plugins.configs` entry defaults to disabled, so it is discovered and
+listed but never loaded. CPA keeps the newest version per plugin id and removes
+the superseded file on the next start.
+
+Once the plugin is loaded and effectively enabled, the console lists it under
+Plugins → Installed with its version and config editor, and its claim page
+appears in the console navigation as **活动领取**. The page opens inside the
+console's plugin host: the console serves the plugin's own document from a
+same-origin frame, mirrors the gateway credential into CPAMC's
+`cli-proxy-auth` storage entry, and proxies the claim routes, so the page needs
+no key and CPA need not be reachable from the browser. Pages registered by a
+plugin that is installed but not effectively enabled are not listed.
+
 ## Description declaration
 
 Releases from 0.1.4 publish an optional `<plugin_id>.omc.json` (`schema_version` 1)
@@ -228,6 +340,61 @@ MCP usage as an informational bucket, live and pending gift buckets, personal
 reset counts, remaining gift tokens, pending claims and server-time offset.
 Quota reads retain the credential's known subscription if an optional endpoint
 is unavailable. Resets stay on the vendor website.
+
+## Claiming gift plans
+
+Sign-in no longer requires an active plan: a fresh account without a plan is
+accepted and can claim one afterwards. The claim flow mirrors the vendor client
+and is exposed as authenticated Management API routes:
+
+| Route | Purpose |
+| --- | --- |
+| `GET /v0/management/plugins/omc-zcode-oauth/claim/plans?auth=<auth file>` | List claimable plans with their grants. |
+| `GET /v0/management/plugins/omc-zcode-oauth/claim/captcha-config` | Aliyun captcha configuration (`scene_id`, `region`, `prefix`, `enabled`). |
+| `POST /v0/management/plugins/omc-zcode-oauth/claim/activate?auth=<auth file>` | Replay the two client presence events (`app_launch`, `app_daily_active`) that make a plan claimable. |
+| `POST /v0/management/plugins/omc-zcode-oauth/claim/claim` | Submit a claim. |
+
+`<auth file>` is the exact credential file name in the auth directory, for
+example `zcode-zcode-zai-4f2a.json`.
+
+### One-click claim page (no panel integration needed)
+
+The plugin ships a self-contained claim page served as a public static
+resource, so a panel does not have to implement anything:
+
+```text
+http://<cpa-host>:<port>/v0/resource/plugins/omc-zcode-oauth/claim.html
+```
+
+Open that URL in a browser, fill in the CLIProxyAPI address (defaults to the
+page origin), the Management API key and the credential file name — or open the
+same page from Oh My CPA's navigation, where the credential is filled in for
+you — then click
+"查询可领取的套餐" and pick a plan. The page loads Aliyun's captcha widget with
+the `scene_id` from `claim/captcha-config`, first attempts the traceless
+verification (8-second timeout) and falls back to the interactive slider, then
+submits the resulting `captchaVerifyParam` through the authenticated claim
+routes above. The key stays in the browser's localStorage and is only sent to
+your own CLIProxyAPI instance.
+
+The claim request body is:
+
+```json
+{"auth":"<auth file>","plan_id":"<plan id>","captcha_param":"<Aliyun captchaVerifyParam>","captcha_region":"<region, optional>"}
+```
+
+The captcha token is single-use and can only be produced by running Aliyun's
+captcha widget (`https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js`)
+in a browser with the `scene_id` from the config route, so the panel owns that
+step: load the widget, run the traceless verification, and submit the resulting
+`captchaVerifyParam` here. A claim without a token is rejected locally and never
+reaches the vendor.
+
+Business rejections keep the vendor code in the response body:
+`1001` unknown plan, `1002` event ended, `1003` already claimed, `1004`
+conditions not met, `1005` daily limit reached, `3001` invalid parameters,
+`3007` captcha failed (retry with a fresh token). Claim operations on the same
+credential file are serialized inside the plugin.
 
 ## Error handling
 

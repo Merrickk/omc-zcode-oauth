@@ -8,7 +8,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
-var pluginVersion = "0.2.5"
+var pluginVersion = "0.3.0"
 
 type rpcAuthStart struct {
 	pluginapi.AuthLoginStartRequest
@@ -115,15 +115,19 @@ func handleMethod(method string, raw []byte) (any, error) {
 	case "auth.refresh":
 		return nil, pluginabi.NewError("reauth_required", "ZCode sessions cannot be refreshed; sign in again", 400)
 	case "management.register":
-		return map[string]any{"resources": []map[string]any{
+		return map[string]any{"routes": claimRoutes(), "resources": []map[string]any{
 			{"path": "/zai.png", "menu": "", "description": "Z.AI sign-in logo."},
 			{"path": "/bigmodel.png", "menu": "", "description": "BigModel sign-in logo."},
+			{"path": "/claim.html", "menu": "活动领取", "description": "Gift-plan claim page; runs the Aliyun captcha in the browser."},
 			{"path": "/omc.json", "menu": "", "description": "Public, optional OMC plugin declaration."},
 		}}, nil
 	case "management.handle":
 		var r rpcManagement
 		if err := unmarshal(raw, &r); err != nil {
 			return nil, err
+		}
+		if resp, handled := handleClaimAPI(r.ManagementRequest); handled {
+			return resp, nil
 		}
 		return handleManagementResource(r.ManagementRequest)
 	case "model.static":

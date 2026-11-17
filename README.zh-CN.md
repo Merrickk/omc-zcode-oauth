@@ -86,6 +86,14 @@ OAuth 发起和轮询使用 CPA 原生受认证管理 API，公共插件资源�
 - ZCode 并发错误的有限重试，风控失效关闭（fail-closed）处理。ZCode 在配额或并发报错
   上给出 `Retry-After` 时，错误同时带上还剩多久，CPA 因此会让凭证休息，而不是在窗口内
   继续重试。
+- 登录不要求已有套餐：无套餐的新账号可正常登录，之后再领取。
+- 礼包活动领取（预览可领套餐 / 验证码配置 / 激活上报 / 提交领取），通过受认证的
+  Management API 暴露；插件自带领取页
+  （`/v0/resource/plugins/omc-zcode-oauth/claim.html`），在浏览器中完成阿里云
+  验证码（先静默验证、失败再弹滑块），无需面板做任何集成；该页也注册为插件页面，
+  装好后直接出现在 Oh My CPA 侧边栏，详见 [docs/USAGE.md](docs/USAGE.md)。
+- 可自建插件源：`make-registry.py` 生成 `registry.json`，放在本仓库里即可作为
+  `plugins.store-sources` 的一条来源，无需依赖上游注册表。
 
 ## 安装
 

@@ -32,11 +32,20 @@ func TestPublicResourceRegistrationIsStaticOnly(t *testing.T) {
 	var paths []string
 	for _, resource := range registration.Resources {
 		paths = append(paths, resource.Path)
-		if resource.Menu != "" {
-			t.Error("static resources must not add a menu")
+		// A menu turns a resource into a page the console hosts; only the claim
+		// page declares one, and it must stay inside this plugin's own prefix.
+		if resource.Menu != "" && resource.Path != "/claim.html" {
+			t.Errorf("resource %q must not add a menu", resource.Path)
 		}
 	}
-	if !reflect.DeepEqual(paths, []string{"/zai.png", "/bigmodel.png", "/omc.json"}) || len(registration.Routes) != 0 {
+	// Public resources stay static-only; the claim endpoints live on the
+	// authenticated Management API routes, never on the unauthenticated ones.
+	for _, route := range registration.Routes {
+		if !strings.HasPrefix(route.Path, "/v0/management/plugins/"+pluginStoreID+"/claim/") {
+			t.Errorf("unexpected non-claim management route %q", route.Path)
+		}
+	}
+	if !reflect.DeepEqual(paths, []string{"/zai.png", "/bigmodel.png", "/claim.html", "/omc.json"}) || len(registration.Routes) != 4 {
 		t.Fatalf("public resource registration is not static-only: paths=%v routes=%v", paths, registration.Routes)
 	}
 }
@@ -149,6 +158,7 @@ func TestPublicResourcesAreExactQueryIndependentBytes(t *testing.T) {
 		for _, resource := range []struct{ path, contentType string }{
 			{prefix + "/zai.png", "image/png"},
 			{prefix + "/bigmodel.png", "image/png"},
+			{prefix + "/claim.html", "text/html; charset=utf-8"},
 			{omcResourcePath, "application/json; charset=utf-8"},
 		} {
 			expected, err := os.ReadFile(filepath.Join("assets", filepath.Base(resource.path)))

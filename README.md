@@ -95,6 +95,16 @@ local callback listener, or manual callback URL submission is required.
   controls. A quota or concurrency refusal also states how long it still runs when
   ZCode sends `Retry-After`, so CPA rests the credential instead of retrying inside
   the window.
+- Sign-in does not require an active plan: a fresh plan-less account is accepted
+  and can claim one afterwards.
+- Gift plan claiming (list claimable plans / captcha config / activation events /
+  submit claim) over authenticated Management API routes, plus a self-contained
+  claim page (`/v0/resource/plugins/omc-zcode-oauth/claim.html`) that runs the
+  Aliyun captcha in the browser — traceless first, slider fallback — so no panel
+  integration is required; the page is also registered as a plugin page, so it
+  appears in Oh My CPA's navigation; see [docs/USAGE.md](docs/USAGE.md).
+- Self-hosted plugin source: `make-registry.py` writes a `registry.json` that can
+  live in this repository and be added to `plugins.store-sources`.
 
 ## Installation
 

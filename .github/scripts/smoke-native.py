@@ -93,12 +93,19 @@ def smoke(library, version, descriptor):
                 raise ValueError(f"native {method} must stay on the zcode provider key")
         management = rpc("management.register", {})
         resources = management["resources"]
-        if [entry["path"] for entry in resources] != ["/zai.png", "/bigmodel.png", "/omc.json"] or any(entry["menu"] for entry in resources) or management.get("routes"):
-            raise ValueError("native public resources must be exactly three passive assets with no menu")
+        if [entry["path"] for entry in resources] != ["/zai.png", "/bigmodel.png", "/claim.html", "/omc.json"]:
+            raise ValueError("native public resources must be exactly four assets in registration order")
+        # Only the claim page is a console page; the rest stay passive assets.
+        if [entry.get("menu") or "" for entry in resources] != ["", "", "活动领取", ""]:
+            raise ValueError("only the claim page may declare a console menu")
+        routes = management.get("routes") or []
+        if len(routes) != 4 or any(not route.get("path", "").startswith(f"/v0/management/plugins/{PLUGIN_ID}/claim/") for route in routes):
+            raise ValueError("native management routes must be exactly the four claim API endpoints")
         prefix = f"/v0/resource/plugins/{PLUGIN_ID}"
         assets = {"omc.json": (descriptor, "application/json; charset=utf-8")}
         for name in ("zai.png", "bigmodel.png"):
             assets[name] = ((Path(__file__).resolve().parents[2] / "go" / "assets" / name).read_bytes(), "image/png")
+        assets["claim.html"] = ((Path(__file__).resolve().parents[2] / "go" / "assets" / "claim.html").read_bytes(), "text/html; charset=utf-8")
         probes = 0
         for name, (expected, content_type) in assets.items():
             path = f"{prefix}/{name}"

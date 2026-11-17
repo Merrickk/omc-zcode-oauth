@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZCode 活动领取</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+         max-width: 720px; margin: 20px auto; padding: 0 16px; color: #1f2328; }
+  h1 { font-size: 17px; margin: 0 0 4px; } h2 { font-size: 14px; margin: 18px 0 6px; color: #57606a; }
+  .row { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
+  input, select { flex: 1; min-width: 180px; padding: 6px 10px; border: 1px solid #d0d7de;
+         border-radius: 6px; font: inherit; background: #fff; color: inherit; }
+  button { padding: 6px 14px; border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa;
+         cursor: pointer; font: inherit; color: inherit; }
+  button.primary { background: #0969da; border-color: #0969da; color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .plan { border: 1px solid #d0d7de; border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+  .plan .name { font-weight: 600; }
+  .plan .grants { color: #57606a; font-size: 12px; margin-bottom: 6px; }
+  #status { margin-top: 16px; padding: 8px 12px; border-radius: 6px; background: #f6f8fa; white-space: pre-wrap; }
+  #status.err { background: #ffebe9; } #status.ok { background: #dafbe1; }
+  #cap-holder { margin-top: 10px; }
+  .hint { color: #57606a; font-size: 12px; margin: 4px 0 0; }
+  .hidden { display: none !important; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6edf3; } input, select, button { background: #21262d; border-color: #30363d; color: #e6edf3; }
+    #status, .plan { background: #161b22; border-color: #30363d; }
+    #status.err { background: #3d1418; } #status.ok { background: #10352a; }
+  }
+</style>
+</head>
+<body>
+<h1>ZCode 活动领取</h1>
+<p class="hint" id="conn-hint">正在识别连接方式…</p>
+
+<h2>凭据</h2>
+<div class="row" id="auth-row">
+  <select id="auth-select" class="hidden"></select>
+  <input id="auth" placeholder="凭据文件名，如 zcode-zai-xxxx.json">
+  <button id="btn-reload" title="重新读取凭据列表">刷新</button>
+</div>
+
+<h2 class="hidden" id="manual-title">手动连接</h2>
+<div class="row hidden" id="manual-row">
+  <input id="base" placeholder="CLIProxyAPI 地址，如 http://127.0.0.1:8317">
+  <input id="key" type="password" placeholder="Management API Key">
+</div>
+
+<div class="row">
+  <button id="btn-plans" class="primary">查询可领取的套餐</button>
+  <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 领取前上报活跃事件</label>
+</div>
+
+<h2>套餐</h2>
+<div id="plans" class="hint">尚未查询。</div>
+<div id="cap-holder"></div>
+
+<div id="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  const SDK_URL = "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js";
+  const CLAIM_API = "/v0/management/plugins/omc-zcode-oauth/claim";
+  const TRACELESS_TIMEOUT = 8000;
+  const CPAMC_AUTH_KEY = "cli-proxy-auth";
+  const CPAMC_PREFIX = "enc::v2::";
+  const CPAMC_SALT = "cli-proxy-api-webui::secure-storage";
+
+  const $ = (id) => document.getElementById(id);
+  let baseURL = location.origin;
+  let managementKey = "";
+  let captchaCfg = null;
+  let pendingClaim = null;
+  let submitted = false;
+  let tracelessTimer = 0;
+
+  function status(text, tone) {
+    const el = $("status");
+    el.textContent = text || "";
+    el.className = tone || "";
+  }
+  function hint(text) { $("conn-hint").textContent = text; }
+
+  // The panel mirrors its gateway credential into CPAMC's own storage entry so a
+  // plugin page opens already signed in. Reading it keeps this page zero-config
+  // inside Oh My CPA while still working standalone against a raw CPA instance.
+  function readPanelCredential() {
+    try {
+      const raw = localStorage.getItem(CPAMC_AUTH_KEY);
+      if (!raw || !raw.startsWith(CPAMC_PREFIX)) return null;
+      const binary = atob(raw.slice(CPAMC_PREFIX.length));
+      const key = new TextEncoder().encode(CPAMC_SALT + "|" + location.host);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i) ^ key[i % key.length];
+      }
+      const doc = JSON.parse(new TextDecoder().decode(bytes));
+      const state = doc && doc.state ? doc.state : {};
+      return {
+        apiBase: typeof state.apiBase === "string" ? state.apiBase : "",
+        managementKey: typeof state.managementKey === "string" ? state.managementKey : "",
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function resolveConnection() {
+    const panel = readPanelCredential();
+    if (panel && (panel.apiBase || panel.managementKey)) {
+      baseURL = (panel.apiBase || location.origin).replace(/\/+$/, "");
+      managementKey = panel.managementKey;
+      $("manual-row").classList.add("hidden");
+      $("manual-title").classList.add("hidden");
+      hint("已通过面板凭据自动连接（" + baseURL + "），无需填写 Key。");
+      return true;
+    }
+    const savedBase = localStorage.getItem("omcZcodeClaimBase") || "";
+    const savedKey = localStorage.getItem("omcZcodeClaimKey") || "";
+    $("base").value = savedBase || location.origin;
+    $("key").value = savedKey;
+    $("manual-row").classList.remove("hidden");
+    $("manual-title").classList.remove("hidden");
+    baseURL = ($("base").value || location.origin).replace(/\/+$/, "");
+    managementKey = $("key").value.trim();
+    hint("未检测到面板凭据：可手动填写 CLIProxyAPI 地址与 Management Key，或直接在面板的插件页中打开本页。");
+    return Boolean(baseURL);
+  }
+
+  function headers() {
+    const h = { "Content-Type": "application/json" };
+    if (managementKey) h["Authorization"] = "Bearer " + managementKey;
+    return h;
+  }
+
+  async function call(method, path, body) {
+    if ($("base").value) baseURL = $("base").value.trim().replace(/\/+$/, "");
+    if ($("key").value) managementKey = $("key").value.trim();
+    const resp = await fetch(baseURL + path, {
+      method,
+      headers: headers(),
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    let out = null;
+    try { out = await resp.json(); } catch (_) {}
+    if (!resp.ok) {
+      const message = (out && (out.error || out.message)) || ("HTTP " + resp.status);
+      const err = new Error(message);
+      err.outcome = out && out.outcome;
+      throw err;
+    }
+    return out;
+  }
+
+  function selectedAuth() {
+    const sel = $("auth-select");
+    if (!sel.classList.contains("hidden") && sel.value) return sel.value;
+    return $("auth").value.trim();
+  }
+
+  async function loadAuthFiles() {
+    const sel = $("auth-select");
+    try {
+      const doc = await call("GET", "/v0/management/auth-files");
+      const files = Array.isArray(doc && doc.files) ? doc.files : [];
+      const zcode = files.filter((f) => {
+        const provider = String(f.provider || "").toLowerCase();
+        const name = String(f.name || "").toLowerCase();
+        return provider.includes("zcode") || name.includes("zcode");
+      });
+      if (!zcode.length) {
+        sel.classList.add("hidden");
+        return;
+      }
+      sel.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "选择凭据（" + zcode.length + " 个）";
+      sel.appendChild(placeholder);
+      for (const file of zcode) {
+        const option = document.createElement("option");
+        option.value = String(file.name || "");
+        option.textContent = String(file.name || "") + (file.disabled ? "（已停用）" : "");
+        sel.appendChild(option);
+      }
+      sel.classList.remove("hidden");
+      const remembered = localStorage.getItem("omcZcodeClaimAuth") || "";
+      if (remembered) {
+        const match = zcode.find((f) => f.name === remembered);
+        if (match) sel.value = remembered;
+      }
+      if (sel.value) $("auth").value = sel.value;
+    } catch (_) {
+      sel.classList.add("hidden");
+    }
+  }
+
+  function loadSdk() {
+    if (typeof window.initAliyunCaptcha === "function") return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = SDK_URL;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("阿里云验证码组件加载失败（可能被网络或浏览器扩展拦截）"));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function runCaptcha(plan) {
+    const name = selectedAuth();
+    if (!name) throw new Error("请先选择或填写凭据文件名");
+    localStorage.setItem("omcZcodeClaimAuth", name);
+
+    status("正在准备验证…");
+    if (!captchaCfg) {
+      captchaCfg = await call("GET", CLAIM_API + "/captcha-config");
+    }
+    if (!captchaCfg || !captchaCfg.enabled || !captchaCfg.scene_id) {
+      throw new Error("服务端未开启验证码或缺少场景配置，暂时无法领取");
+    }
+    await loadSdk();
+    window.AliyunCaptchaConfig = { region: captchaCfg.region, prefix: captchaCfg.prefix };
+
+    pendingClaim = plan;
+    submitted = false;
+
+    const finish = (param) => {
+      if (submitted) return;
+      submitted = true;
+      clearTimeout(tracelessTimer);
+      const token = typeof param === "string" ? param : (param && param.captchaVerifyParam);
+      if (!token || !String(token).trim()) {
+        status("验证回调没有返回 token，请重试。", "err");
+        return;
+      }
+      submitClaim(pendingClaim, String(token).trim());
+    };
+    const interactive = (why) => {
+      clearTimeout(tracelessTimer);
+      status("静默验证未通过，请在弹出的滑块中完成验证。" + (why ? "（" + String(why).slice(0, 120) + "）" : ""));
+    };
+
+    window.initAliyunCaptcha({
+      SceneId: captchaCfg.scene_id,
+      mode: "popup",
+      language: (navigator.language || "zh-CN").toLowerCase().startsWith("en") ? "en" : "zh-CN",
+      showErrorTip: false,
+      element: "#cap-holder",
+      button: "#cap-btn-" + plan.plan_id,
+      getInstance: (instance) => {
+        if (typeof instance.startTracelessVerification === "function") {
+          status("正在尝试静默验证…");
+          instance.startTracelessVerification();
+          tracelessTimer = setTimeout(() => interactive("timeout"), TRACELESS_TIMEOUT);
+        } else {
+          interactive();
+        }
+      },
+      success: finish,
+      fail: interactive,
+      onError: interactive,
+    });
+  }
+
+  async function submitClaim(plan, token) {
+    const name = selectedAuth();
+    try {
+      if ($("activate").checked) {
+        status("上报活跃事件…");
+        await call("POST", CLAIM_API + "/activate?auth=" + encodeURIComponent(name));
+      }
+      status("提交领取…");
+      const out = await call("POST", CLAIM_API + "/claim", {
+        auth: name,
+        plan_id: plan.plan_id,
+        captcha_param: token,
+        captcha_region: (captchaCfg && captchaCfg.region) || "",
+      });
+      const when = out.next_claim_at ? "\n下次可领取时间：" + new Date(out.next_claim_at * 1000).toLocaleString() : "";
+      status("✅ 领取成功：" + (out.plan_name || plan.name || plan.plan_id) + when, "ok");
+      await refreshPlans();
+    } catch (e) {
+      let text = "❌ 领取失败：" + e.message;
+      if (e.outcome && e.outcome.next_claim_at) {
+        text += "\n冷却中，下次可领取时间：" + new Date(e.outcome.next_claim_at * 1000).toLocaleString();
+      }
+      status(text, "err");
+    } finally {
+      $("btn-plans").disabled = false;
+    }
+  }
+
+  function renderPlans(plans) {
+    const box = $("plans");
+    box.className = "";
+    if (!plans || !plans.length) {
+      box.textContent = "当前没有可领取的套餐（可能已领取或不在活动期）。";
+      return;
+    }
+    box.innerHTML = "";
+    for (const plan of plans) {
+      const card = document.createElement("div");
+      card.className = "plan";
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = plan.name || plan.plan_id;
+      const grants = document.createElement("div");
+      grants.className = "grants";
+      const list = (plan.grants && plan.grants.length)
+        ? plan.grants
+        : (plan.grant_items || []).map((g) => g.name || g.item || g.title || JSON.stringify(g));
+      grants.textContent = list.join("、") || plan.description || "";
+      const button = document.createElement("button");
+      button.className = "primary";
+      button.id = "cap-btn-" + plan.plan_id;
+      button.textContent = "领取";
+      button.addEventListener("click", () => {
+        $("btn-plans").disabled = true;
+        runCaptcha(plan).catch((e) => {
+          status("❌ " + e.message, "err");
+          $("btn-plans").disabled = false;
+        });
+      });
+      card.appendChild(name);
+      card.appendChild(grants);
+      card.appendChild(button);
+      box.appendChild(card);
+    }
+  }
+
+  async function refreshPlans() {
+    const name = selectedAuth();
+    if (!name) throw new Error("请先选择或填写凭据文件名");
+    localStorage.setItem("omcZcodeClaimAuth", name);
+    captchaCfg = null;
+    const out = await call("GET", CLAIM_API + "/plans?auth=" + encodeURIComponent(name));
+    renderPlans(out.plans);
+  }
+
+  $("btn-plans").addEventListener("click", async () => {
+    $("btn-plans").disabled = true;
+    try {
+      status("查询套餐…");
+      await refreshPlans();
+      status("查询完成。点击套餐旁的“领取”开始（会自动尝试静默验证）。", "ok");
+    } catch (e) {
+      status("❌ " + e.message, "err");
+    } finally {
+      $("btn-plans").disabled = false;
+    }
+  });
+
+  $("btn-reload").addEventListener("click", () => { void loadAuthFiles(); });
+  $("auth-select").addEventListener("change", () => {
+    if ($("auth-select").value) $("auth").value = $("auth-select").value;
+  });
+
+  resolveConnection();
+  void loadAuthFiles();
+})();
+</script>
+</body>
+</html>
