@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "id": "omc-zcode-oauth",
+      "name": "OMC ZCode OAuth",
+      "description": "Native ZCode provider for CLIProxyAPI and Oh-My-CPA: dual-portal Z.ai / BigModel OAuth login, model discovery, Anthropic Messages execution, Coding Plan and gift routing, normalized quota, and a built-in gift-plan claim page.",
+      "author": "Merrickk",
+      "version": "0.3.0",
+      "repository": "https://github.com/Merrickk/omc-zcode-oauth",
+      "logo": "https://raw.githubusercontent.com/Merrickk/omc-zcode-oauth/main/assets/logo.png",
+      "homepage": "https://github.com/Merrickk/omc-zcode-oauth",
+      "license": "MIT",
+      "tags": [
+        "Provider",
+        "OAuth",
+        "Quota",
+        "GLM",
+        "ZCode",
+        "OMC"
+      ],
+      "locales": {
+        "zh-CN": {
+          "description": "兼容 CLIProxyAPI 的原生 ZCode 提供商插件，支持 Z.ai / BigModel 双入口 OAuth 登录、模型发现、Anthropic Messages 请求、Coding Plan 与赠送额度路由、标准化配额展示，以及内置的活动领取页。"
+        }
+      },
+      "install": {
+        "type": "github-release"
+      }
+    }
+  ]
+}
