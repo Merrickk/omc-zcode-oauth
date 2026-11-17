@@ -2,11 +2,22 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
+
+// hostCallTimeout bounds one outbound call made through the host. The host
+// callback has no deadline of its own: an upstream that blackholes a
+// connection would otherwise hold the management request open until the
+// reverse proxy in front of the gateway gives up and answers with its own
+// opaque 5xx. Failing here keeps the reason readable.
+const hostCallTimeout = 25 * time.Second
+
+var errUpstreamTimeout = errors.New("upstream call timed out; the gateway could not reach the vendor")
 
 type httpSender interface {
 	Do(pluginapi.HTTPRequest) (pluginapi.HTTPResponse, error)
@@ -14,12 +25,25 @@ type httpSender interface {
 type cpaSender struct{ callbackID string }
 
 func (s cpaSender) Do(req pluginapi.HTTPRequest) (pluginapi.HTTPResponse, error) {
-	var out pluginapi.HTTPResponse
-	err := hostRPC("host.http.do", map[string]any{"host_callback_id": s.callbackID, "request": req}, &out)
-	if err != nil {
-		return out, fmt.Errorf("upstream transport failed")
+	type result struct {
+		resp pluginapi.HTTPResponse
+		err  error
 	}
-	return out, nil
+	done := make(chan result, 1)
+	go func() {
+		var out pluginapi.HTTPResponse
+		err := hostRPC("host.http.do", map[string]any{"host_callback_id": s.callbackID, "request": req}, &out)
+		done <- result{resp: out, err: err}
+	}()
+	select {
+	case r := <-done:
+		if r.err != nil {
+			return r.resp, fmt.Errorf("upstream transport failed")
+		}
+		return r.resp, nil
+	case <-time.After(hostCallTimeout):
+		return pluginapi.HTTPResponse{}, errUpstreamTimeout
+	}
 }
 
 type apiError struct {

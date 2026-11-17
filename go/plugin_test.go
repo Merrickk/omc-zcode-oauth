@@ -1240,3 +1240,38 @@ func TestClaimHandlerPanicBecomesJSONResponse(t *testing.T) {
 		t.Fatalf("panic response is not JSON: %v", resp.Headers)
 	}
 }
+
+func TestClaimPingNeedsNoCredentialOrVendor(t *testing.T) {
+	// The self check must answer with no auth directory, no credential and no
+	// outbound call, so it separates a broken management route from a broken
+	// upstream.
+	original := claimSender
+	claimSender = func() httpSender {
+		t.Fatal("ping must not call the vendor")
+		return nil
+	}
+	t.Cleanup(func() { claimSender = original })
+
+	raw, err := json.Marshal(rpcManagement{ManagementRequest: pluginapi.ManagementRequest{
+		Method: http.MethodGet,
+		Path:   claimAPIPrefix + "/ping",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := handleMethod("management.handle", raw)
+	if err != nil {
+		t.Fatalf("ping failed: %v", err)
+	}
+	resp := value.(pluginapi.ManagementResponse)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("ping status = %d", resp.StatusCode)
+	}
+	var out map[string]any
+	if json.Unmarshal(resp.Body, &out) != nil || out["ok"] != true || out["version"] != pluginVersion {
+		t.Fatalf("ping body = %s", resp.Body)
+	}
+	if _, ok := out["auth_dir"].(bool); !ok {
+		t.Fatalf("ping must report whether the auth directory is known: %v", out)
+	}
+}

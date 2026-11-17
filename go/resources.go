@@ -151,6 +151,7 @@ func claimRoutes() []map[string]any {
 		{"method": http.MethodPost, "path": claimAPIPrefix + "/claim", "menu": "", "description": desc},
 		{"method": http.MethodGet, "path": claimAPIPrefix + "/captcha-config", "menu": "", "description": desc},
 		{"method": http.MethodPost, "path": claimAPIPrefix + "/activate", "menu": "", "description": desc},
+		{"method": http.MethodGet, "path": claimAPIPrefix + "/ping", "menu": "", "description": desc},
 	}
 }
 
@@ -167,6 +168,15 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 	dir := riskState.authDir
 	sub := strings.TrimPrefix(path, claimAPIPrefix)
 	switch {
+	case sub == "/ping" && req.Method == http.MethodGet:
+		// Vendor-free self check: it proves the management route itself works,
+		// so a later failure can be blamed on the outbound call instead.
+		return managementJSON(http.StatusOK, map[string]any{
+			"ok":       true,
+			"version":  pluginVersion,
+			"auth_dir": dir != "",
+		}), true
+
 	case sub == "/plans" && req.Method == http.MethodGet:
 		name := req.Query.Get("auth")
 		c, err := claimCredential(dir, name)
