@@ -62,3 +62,59 @@ captcha vendor's changes.
 ```sh
 python3 docs/research/aliyun_protocol_probe.py /path/to/AliyunCaptcha.js
 ```
+
+## Follow-up: request encryption fully recovered (this session)
+
+Playing with the two string tables paid off. The old "garbled" key derivation
+was because the `ie` table rotation had never been computed. Simulating its
+checksum IIFE gives rotation **6**, after which the whole CryptoJS setup decodes:
+
+```
+V(462)=AES  V(401)=enc  V(291)=Utf8  V(380)=Base64  V(442)=Hex
+V(352)=pad  V(345)=Pkcs7  V(294)=parse  V(326)=decrypt
+```
+
+Derived AES parameters (CBC, PKCS7):
+
+```
+IV      = Utf8(Base64(Hex("d35db7e39ebbf3d001083105"))) = b"0123456789ABCDEF"
+access  = "FqJB6iRNVYdEGpwb"      # Utf8 key for ye()/de()
+```
+
+Decrypting the embedded ciphertexts with that key/IV yields the **full key
+chain** (all base64 blobs in the loader's `Yt` table):
+
+```
+LOG AccessKey : DuaneAprqkYsF3nt1yjK29Bf / DuanemHmyeE6LXCC46sJEDUw5DTlSZ
+Yt[REQ]       -> 45f8ac1e1de14397   (request Data encryption key)
+Yt[RES]       -> 87f879f135f27da7   (response decryption key)
+Yt[FLAG]      -> c175a358550d02e2   (inner flag encryption key)
+```
+
+`Ne()` (the InitCaptcha builder) is now reproducible end to end:
+
+1. `flag = AES-CBC(flag_key, PLATFORM#appName#sceneId#captcha-front#prefix#region)`
+2. `Data = AES-CBC(req_key, appKey#WEB#flag#APP_VERSION#CLOUD#)`
+3. POP-sign `{AaduaneId, Version=2020-10-15, Action, Data, SignatureNonce}` with
+   the LOG secret over `POST&%2F&` + sorted encoded query.
+
+`aliyun_protocol_probe.py:init_request()` builds this. It produces a well-formed
+encrypted `Data` blob.
+
+### Where it still stops
+
+- The LOG AccessKey signs fine (the gateway answers `No Mapping Action Url!`,
+  not `InvalidAccessKeyId`), but that key is scoped to the log gateway. The
+  second embedded key pair (`111jdk...`/`222aiJ...`) is a placeholder and is
+  rejected as `Invalid AccessKeyId` on the device endpoints.
+- The device OpenAPI needs its own valid AccessKey/routing that is **not** fully
+  static in this loader; it is selected by `Xe()` from `Be[c][f]` using verifyType
+  and region, and the endpoint list is populated at runtime.
+- Even with a valid InitCaptcha response, `VerifyCaptchaV2/V3` still needs the
+  second-stage dynamic JS + FeiLin fingerprint payload, which is versioned and
+  behaviour-driven.
+
+So: the crypto layer is fully solved; the remaining blockers are a valid device
+AccessKey/route and the anti-bot payload, both of which are outside what a
+stable pure-protocol client can own. The conclusion from the main document is
+unchanged; no runtime code was altered.

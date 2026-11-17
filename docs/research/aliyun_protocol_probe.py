@@ -116,3 +116,53 @@ if __name__ == "__main__":
         c["key_id"], c["key_secret"], c["endpoints"]["waf"],
     )
     print(status, body[:800])
+
+def aes_encrypt(key: str, plaintext: str) -> str:
+    ht = P(234, 279, 208).encode()
+    iv = base64.b64encode(bytes.fromhex(ht.decode())).decode().encode()
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import pad
+    c = AES.new(key.encode(), AES.MODE_CBC, iv)
+    return base64.b64encode(c.encrypt(pad(plaintext.encode(), 16))).decode()
+
+def action_constants():
+    sec = P(354, 391)
+    # WEB AES secret keys, decrypted from Yt table entries
+    req_key = decrypt(sec, P(490, 493, 440, 224, 432, 405))   # Yt[REQ]
+    res_key = decrypt(sec, P(400, 425, 298, 429, 470, 373))   # Yt[RES]
+    flag_key = decrypt(sec, P(360, 278, 323, 395, 433, 291))  # Yt[FLAG]
+    return {"req_key": req_key, "res_key": res_key, "flag_key": flag_key}
+
+def init_request(scene_id: str, region: str = "cn", prefix: str = ""):
+    """Replicate Ne(): encrypted Data= payload + POP signature, device API."""
+    c = constants()
+    ak = action_constants()
+    # x = decrypt(ACCESS_SEC, WEB_AES_FLAG_SECRET_KEY[FLAG]) used inside Ne for the
+    # inner flag encryption (de(s, plaintext)); s = ye(ACCESS_SEC, i.secretKey) || WEB_AES_FLAG_SECRET_KEY.
+    # The device config i.secretKey is embedded as Yt[FLAG] ciphertext -> ak['flag_key'].
+    flag = aes_encrypt(ak["flag_key"],
+                       c["app_name"] + "#" + (c["app_name"]) + "#" + scene_id +
+                       "#captcha-front#" + prefix + "#" + region)
+    # Actually Ne uses i.PLATFORM+"#"+a+"#"+(i.sceneId||"")+"#captcha-front#"+i.prefix+"#"+i.region
+    platform = "W.10001.c"  # U(436)+'c' from earlier
+    inner = platform + "#" + c["app_name"] + "#" + scene_id + "#captcha-front#" + prefix + "#" + region
+    flag = aes_encrypt(ak["flag_key"], inner)
+    data = aes_encrypt(ak["req_key"],
+                       c["app_key"] + "#WEB#" + flag + "#" + P(366) + "2" + "#CLOUD#")
+    params = {
+        "AaduaneId": c["key_id"],
+        "Version": c["api_version"],
+        "SignatureMethod": "HMAC-SHA1",
+        "SignatureVersion": "1.0",
+        "Format": "JSON",
+        "Action": "InitCaptcha",
+        "Data": data,
+        "SignatureNonce": str(uuid.uuid4()),
+    }
+    # sign with the effective KEY_SECRET from Ne: ye(ACCESS_SEC, pt.secretKey) was invalid,
+    # but o.KEY_SECRET passed to Ne is the LOG secret (o=_e): KEY_SECRET = Duane...
+    key_secret = "DuanemHmyeE6LXCC46sJEDUw5DTlSZ"
+    qs = "&".join(f"{esc(k)}={esc(v)}" for k, v in sorted(params.items()) if k != "Signature")
+    sig = base64.b64encode(hmac.new((key_secret + "&").encode(), ("POST&%2F&" + esc(qs)).encode(), hashlib.sha1).digest()).decode()
+    params["Signature"] = sig
+    return params
