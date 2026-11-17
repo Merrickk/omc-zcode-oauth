@@ -144,11 +144,15 @@
       headers: headers(),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    // Read the body once: a failure can be the plugin's JSON, the host's plain
+    // text ("plugin management handler failed"), or a proxy's HTML page, and the
+    // operator needs to see which.
+    const text = await resp.text();
     let out = null;
-    try { out = await resp.json(); } catch (_) {}
+    try { out = text ? JSON.parse(text) : null; } catch (_) {}
     if (!resp.ok) {
-      const message = (out && (out.error || out.message)) || ("HTTP " + resp.status);
-      const err = new Error(message);
+      const detail = (out && (out.error || out.message)) || text.trim().slice(0, 300);
+      const err = new Error("HTTP " + resp.status + (detail ? " — " + detail : ""));
       err.outcome = out && out.outcome;
       throw err;
     }

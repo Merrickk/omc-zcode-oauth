@@ -8,7 +8,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
-var pluginVersion = "0.3.0"
+var pluginVersion = "0.3.1"
 
 type rpcAuthStart struct {
 	pluginapi.AuthLoginStartRequest
@@ -126,7 +126,7 @@ func handleMethod(method string, raw []byte) (any, error) {
 		if err := unmarshal(raw, &r); err != nil {
 			return nil, err
 		}
-		if resp, handled := handleClaimAPI(r.ManagementRequest); handled {
+		if resp, handled := claimAPIHandler(r.ManagementRequest); handled {
 			return resp, nil
 		}
 		return handleManagementResource(r.ManagementRequest)

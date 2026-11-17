@@ -1222,3 +1222,21 @@ func TestClaimLoginNoLongerRequiresPlan(t *testing.T) {
 		t.Fatalf("plan-less sign-in invented a plan name %q", c.Plan)
 	}
 }
+
+func TestClaimHandlerPanicBecomesJSONResponse(t *testing.T) {
+	// A panic inside a claim request must not become an ABI error: the host
+	// renders that as an opaque plain-text 502 and the reason is lost.
+	resp, handled := recoverClaim("/synthetic", func() (pluginapi.ManagementResponse, bool) {
+		panic("synthetic fault")
+	})
+	if !handled || resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("panic was not converted: handled=%v status=%d", handled, resp.StatusCode)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(resp.Body, &body); err != nil || !strings.Contains(body["error"], "synthetic fault") {
+		t.Fatalf("panic response body = %s", resp.Body)
+	}
+	if resp.Headers.Get("Content-Type") != "application/json; charset=utf-8" {
+		t.Fatalf("panic response is not JSON: %v", resp.Headers)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
@@ -99,14 +100,44 @@ func managementError(status int, err error) pluginapi.ManagementResponse {
 	code := http.StatusBadGateway
 	switch err.(type) {
 	case *claimError:
+		// A vendor business rejection is an expected answer, not a fault.
 		code = http.StatusConflict
 	case *apiError:
 		code = http.StatusBadGateway
+		hostLog("warn", "claim request rejected upstream", map[string]any{"error": err.Error()})
+	default:
+		hostLog("error", "claim request failed", map[string]any{"error": err.Error()})
 	}
 	if status != 0 {
 		code = status
 	}
 	return managementJSON(code, map[string]string{"error": err.Error()})
+}
+
+// claimAPIHandler runs one claim request. A fault inside the handler becomes a
+// JSON response instead of an ABI error: the host turns an ABI error into an
+// opaque plain-text 502, which hides the reason from whoever clicked.
+func claimAPIHandler(req pluginapi.ManagementRequest) (resp pluginapi.ManagementResponse, handled bool) {
+	return recoverClaim(req.Path, func() (pluginapi.ManagementResponse, bool) { return handleClaimAPI(req) })
+}
+
+// recoverClaim is claimAPIHandler's seam: the recovery contract is tested
+// without needing a handler that panics for real.
+func recoverClaim(path string, run func() (pluginapi.ManagementResponse, bool)) (resp pluginapi.ManagementResponse, handled bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			hostLog("error", "claim handler panicked", map[string]any{"panic": fmt.Sprint(recovered), "path": path})
+			resp = managementJSON(http.StatusInternalServerError, map[string]string{"error": "claim handler failed: " + fmt.Sprint(recovered)})
+			handled = true
+		}
+	}()
+	return run()
+}
+
+// hostLog writes one line to the host's log when a host callback is available.
+// Outside a host (tests, or a resource-only call) it is a no-op.
+func hostLog(level, message string, fields map[string]any) {
+	_ = hostRPC(pluginabi.MethodHostLog, map[string]any{"level": level, "message": message, "fields": fields}, nil)
 }
 
 // claimRoutes registers the authenticated Management API claim endpoints.
