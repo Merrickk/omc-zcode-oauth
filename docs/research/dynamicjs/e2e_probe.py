@@ -44,7 +44,7 @@ def main():
         return str(v)
     # Prefer the exact same-session fingerprint plaintext captured from a live
     # browser. The generic field dump has a different field count/framing.
-    fp_plain_file = Path("/tmp/session_fp_plain.txt")
+    fp_plain_file = Path("/tmp/token_fp_plain.txt")
     if fp_plain_file.exists():
         fields = fp_plain_file.read_text().split("#")
     else:

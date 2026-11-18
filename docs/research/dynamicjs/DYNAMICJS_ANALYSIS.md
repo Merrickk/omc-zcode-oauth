@@ -360,3 +360,16 @@ Local evidence:
   deviceToken framing. The TrackList generator is byte-exact for a captured
   input, but the e2e driver is still not reproducing the live dynamic key
   derivation for a fresh session.
+
+## Token fingerprint source corrected
+
+A same-session AES capture shows the actual `deviceToken` field 2 is produced by
+the AES call whose plaintext is the 619-byte reduced fingerprint string, not
+the 770/2299-byte full fingerprint dictionaries. This produces the observed
+1048-char token cipher field and a 1276-char token.
+
+The e2e probe now uses this exact reduced fingerprint plaintext as a template,
+generating a 268-char data blob and a token with matching real-world field
+lengths. Verify still returns F017, confirming that token framing is now correct
+and the remaining issue is the dynamic key/hash relationship inside `data` for
+a fresh session.
