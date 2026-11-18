@@ -388,3 +388,15 @@ session key          = de6385b1da19fed2
 The e2e driver was changed to derive the key from `DeviceConfig`. Data length
 returned to 252 chars because the TrackList digest prefix must be the 32-hex
 value from the TrackList builder, not simply the session key repeated.
+
+## Dynamic key a549a55c60a39aa0 source
+
+Runtime CryptoJS `Utf8.parse` hooking shows the second dynamic key
+`a549a55c60a39aa0` is parsed inside FeiLin (`ro/rM/l.W/n9/ap`), not dynamicJS.
+The same call stack appears twice, matching the two encrypted verify payloads
+observed in AES calls #9 and #20.
+
+The key is FeiLin-side derived; the e2e driver currently has the full encrypted
+payload structure but does not yet reproduce this FeiLin key derivation from a
+fresh InitCaptcha session. This is the concrete remaining blocker for turning
+F017 into T001.
