@@ -334,3 +334,29 @@ state and browser-consistent values. Decrypting token field 2 with the known
 static keys does not produce plaintext, confirming that the session key is
 derived/transported elsewhere in the live run and must be captured per-session
 for exact reproduction.
+
+## F017 diagnosis (external + local evidence)
+
+External Aliyun docs and write-ups confirm:
+
+- F014 = no init record / replayed or expired
+- F008 = duplicate submission
+- F017 = "protocol or parameter anomaly"; community analysis specifically
+  identifies wrong dynamic key or hashes becoming all-zero when the dynamic
+  JS helper is not fed correctly.
+- F001 = risk strategy rejection (usually behaviour/tracks).
+
+Local evidence:
+
+- Replaying a same-session captured tuple with a fresh signature returns F008
+  (duplicate submission), proving the tuple itself was valid enough to be
+  recognized by the server.
+- Fresh e2e generated tuples consistently return F017.
+- Using the exact same-session fingerprint plaintext fixes structural token
+  length but still returns F017.
+- Correct token prefix for the captured live verify request is `WEB` (9->3
+  chars), not `WEB_PREID`; the earlier assumption was wrong for this run.
+- F017 therefore points to the dynamic key / hash field inside `data`, not to
+  deviceToken framing. The TrackList generator is byte-exact for a captured
+  input, but the e2e driver is still not reproducing the live dynamic key
+  derivation for a fresh session.

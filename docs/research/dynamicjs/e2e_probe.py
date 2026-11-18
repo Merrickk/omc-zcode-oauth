@@ -42,8 +42,14 @@ def main():
         if v is None: return ""
         if isinstance(v, list): return ",".join(str(x) for x in v)
         return str(v)
-    fields = [js_str(v) for v in fingerprint.values()]
-    token = p.make_device_token(device_id, key, fields, preid=True)
+    # Prefer the exact same-session fingerprint plaintext captured from a live
+    # browser. The generic field dump has a different field count/framing.
+    fp_plain_file = Path("/tmp/session_fp_plain.txt")
+    if fp_plain_file.exists():
+        fields = fp_plain_file.read_text().split("#")
+    else:
+        fields = [js_str(v) for v in fingerprint.values()]
+    token = p.make_device_token(device_id, key, fields, preid=False)
 
     host, resp = p.init_captcha()
     init = json.loads(resp)
