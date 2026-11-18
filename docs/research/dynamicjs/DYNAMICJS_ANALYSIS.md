@@ -441,3 +441,19 @@ E2E token structure now matches the live token exactly:
 
 F017 still persists, so the remaining mismatch is inside the AES-encrypted
 payloads/dynamic key, not token framing.
+
+## Risk boundary verification
+
+Two decisive tests:
+
+1. A browser-generated VerifyCaptchaV3 tuple was intercepted before the server
+   consumed it, then immediately replayed from local code with a fresh
+   signature. Result: `F001`, proving transport/signature are not the issue.
+2. The same test was repeated with a normal Chrome user agent, `zh-CN` locale,
+   `Asia/Shanghai` timezone, `navigator.webdriver` hidden, and automation flags
+   disabled. Result remained `F001`.
+
+The server-side risk engine rejects the headless/no-interaction session regardless
+of protocol correctness. This closes protocol debugging: all client-side
+structures are reproduced, while T001 requires a risk-accepted browser session
+(or equivalent behavioural interaction).
