@@ -263,3 +263,15 @@ captured == generated : true
 ```
 
 This completes the offline reproduction of the dynamicJS data blob.
+
+## Replay behaviour
+
+Re-signing an old captured VerifyCaptchaV3 request with fresh Timestamp and
+SignatureNonce returned:
+
+```json
+{"VerifyCode":"F014","VerifyResult":false}
+```
+
+So `certifyId`, `deviceToken` and/or `data` are single-use/time-bound; replay
+tests must generate a fresh InitCaptcha + TrackList + data in the same run.
