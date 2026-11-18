@@ -232,3 +232,34 @@ final encoder. Note that the zlib bytes must match the browser/pako output;
 Node's `zlib.deflateSync` output differs in compression framing, so the
 generator accepts the exact zlib base64 when byte-identical reproduction is
 required.
+
+## Full TrackList -> data reproduction (final)
+
+The last mismatch between the offline generator and the captured blob was the
+deflate input framing. The dynamicJS code does not compress only the JSON object;
+it compresses:
+
+```text
+<32-hex digest><compact JSON of TrackList wrapper>
+```
+
+The extracted pako module (`pako_deflate_module.js`) reproduces the exact
+browser compression bytes. `data_blob_generator.js` now accepts a wrapper file:
+
+```json
+{"__digest":"f1fb...","track":{ ...TrackList wrapper... }}
+```
+
+and generates:
+
+```text
+pako.deflate(digest + JSON.stringify(track)) -> VM1487(zlibB64, sessionKey) -> data
+```
+
+Verified against the same live capture:
+
+```text
+captured == generated : true
+```
+
+This completes the offline reproduction of the dynamicJS data blob.

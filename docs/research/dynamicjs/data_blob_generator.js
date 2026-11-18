@@ -10,6 +10,11 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
+// Browser-equivalent deflate extracted from the live dynamicJS bundle (pako).
+const pakoBody = fs.readFileSync(path.join(__dirname, 'pako_deflate_module.js'), 'utf8');
+const pako = {};
+new Function('t', 'n', pakoBody)({}, pako);
+
 const here = __dirname;
 const trackFile = process.argv[2];
 const sessionKey = process.argv[3] || require('crypto').randomBytes(8).toString('hex');
@@ -25,7 +30,10 @@ try {
   if (typeof parsed === 'string' && parsed.startsWith('eJ')) {
     zlibB64 = parsed;
   } else {
-    zlibB64 = zlib.deflateSync(Buffer.from(JSON.stringify(parsed), 'utf8')).toString('base64');
+    const wrapped = (typeof parsed.__digest === 'string' && typeof parsed.track === 'object')
+    ? parsed.__digest + JSON.stringify(parsed.track)
+    : JSON.stringify(parsed);
+  zlibB64 = Buffer.from(pako.deflate(wrapped), 'binary').toString('base64');
   }
 } catch (_) {
   if (!rawInput.startsWith('eJ')) throw new Error('input must be a TrackList JSON or zlib base64 string');
