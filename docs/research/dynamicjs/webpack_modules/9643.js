@@ -1,0 +1,2 @@
+// webpack module 9643
+9643:function(t,n,e){"use strict";var r=e(7341),i=e(1748),a=e(2219),o=e(6840),u=e(7732),s=e(555),c=e(621),f=e(2250),l=e(8583),h=e(8471),p=e(7441),d=h("slice"),A=l("species"),v=Array,b=Math.max;r({target:"Array",proto:!0,forced:!d},{slice:function(t,n){var e,r,l,h=c(this),d=s(h),m=u(t,d),y=u(void 0===n?d:n,d);if(i(h)&&(a(e=h.constructor)&&(e===v||i(e.prototype))?e=void 0:o(e)&&null===(e=e[A])&&(e=void 0),e===v||void 0===e))return p(h,m,y);for(l=0,r=new(void 0===e?v:e)(b(y-m,0));m<y;m++,l++)m in h&&f(r,l,h[m]);return r.length=l,r}})}

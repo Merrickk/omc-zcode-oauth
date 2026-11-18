@@ -1,0 +1,2 @@
+// webpack module 7946
+7946:function(t,n,e){"use strict";var r=e(456),i=e(7626),a=e(163),o=e(1455),u=e(7441),s=r.Int8Array,c=a.aTypedArray,f=a.exportTypedArrayMethod,l=[].toLocaleString,h=!!s&&o(function(){l.call(new s(1))});f("toLocaleString",function(){return i(l,h?u(c(this)):c(this),u(arguments))},o(function(){return[1,2].toLocaleString()!==new s([1,2]).toLocaleString()})||!o(function(){s.prototype.toLocaleString.call([1,2])}))}

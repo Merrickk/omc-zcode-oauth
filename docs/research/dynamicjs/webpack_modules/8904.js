@@ -1,0 +1,2 @@
+// webpack module 8904
+8904:function(t,n,e){"use strict";var r=e(456),i=e(1455),a=r.RegExp;t.exports={correct:!i(function(){var t=!0;try{a(".","d")}catch(n){t=!1}var n={},e="",r=t?"dgimsy":"gimsy",i=function(t,r){Object.defineProperty(n,t,{get:function(){return e+=r,!0}})},o={dotAll:"s",global:"g",ignoreCase:"i",multiline:"m",sticky:"y"};for(var u in t&&(o.hasIndices="d"),o)i(u,o[u]);return Object.getOwnPropertyDescriptor(a.prototype,"flags").get.call(n)!==r||e!==r})}}

@@ -1,0 +1,2 @@
+// webpack module 3350
+3350:function(t,n,e){"use strict";var r=e(7341),i=e(1609),a=e(1455),o=e(7479),u=e(6539),s=e(7732),c=e(3663),f=o.ArrayBuffer,l=o.DataView,h=l.prototype,p=i(f.prototype.slice),d=i(h.getUint8),A=i(h.setUint8);r({target:"ArrayBuffer",proto:!0,unsafe:!0,forced:a(function(){return!new f(2).slice(1,void 0).byteLength})},{slice:function(t,n){if(p&&void 0===n)return p(u(this),t);for(var e=u(this).byteLength,r=s(t,e),i=s(void 0===n?e:n,e),a=new f(c(i-r)),o=new l(this),h=new l(a),v=0;r<i;)A(h,v++,d(o,r++));return a}})}

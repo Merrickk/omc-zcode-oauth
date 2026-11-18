@@ -1,0 +1,2 @@
+// webpack module 7341
+7341:function(t,n,e){"use strict";var r=e(456),i=e(3895).f,a=e(2444),o=e(453),u=e(8711),s=e(7130),c=e(7653);t.exports=function(t,n){var e,f,l,h,p,d=t.target,A=t.global,v=t.stat;if(e=A?r:v?r[d]||u(d,{}):r[d]&&r[d].prototype)for(f in n){if(h=n[f],l=t.dontCallGetSet?(p=i(e,f))&&p.value:e[f],!c(A?f:d+(v?".":"#")+f,t.forced)&&void 0!==l){if(typeof h==typeof l)continue;s(h,l)}(t.sham||l&&l.sham)&&a(h,"sham",!0),o(e,f,h,t)}}}

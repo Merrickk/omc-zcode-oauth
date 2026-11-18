@@ -1,0 +1,2 @@
+// webpack module 2919
+2919:function(t,n,e){"use strict";var r=e(1360),i=e(1748),a=TypeError,o=Object.getOwnPropertyDescriptor;t.exports=r&&!function(){if(void 0!==this)return!0;try{Object.defineProperty([],"length",{writable:!1}).length=1}catch(t){return t instanceof TypeError}}()?function(t,n){if(i(t)&&!o(t,"length").writable)throw new a("Cannot set read only .length");return t.length=n}:function(t,n){return t.length=n}}

@@ -1,0 +1,2 @@
+// webpack module 2219
+2219:function(t,n,e){"use strict";var r=e(2814),i=e(1455),a=e(9821),o=e(4074),u=e(6451),s=e(5566),c=function(){},f=u("Reflect","construct"),l=/^\s*(?:class|function)\b/,h=r(l.exec),p=!l.test(c),d=function(t){if(!a(t))return!1;try{return f(c,[],t),!0}catch(t){return!1}},A=function(t){if(!a(t))return!1;switch(o(t)){case"AsyncFunction":case"GeneratorFunction":case"AsyncGeneratorFunction":return!1}try{return p||!!h(l,s(t))}catch(t){return!0}};A.sham=!0,t.exports=!f||i(function(){var t;return d(d.call)||!d(Object)||!d(function(){t=!0})||t})?A:d}

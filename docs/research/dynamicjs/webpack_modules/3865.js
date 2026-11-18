@@ -1,0 +1,2 @@
+// webpack module 3865
+3865:function(t,n,e){"use strict";var r,i,a,o=e(1455),u=e(9821),s=e(6840),c=e(1153),f=e(3424),l=e(453),h=e(8583),p=e(3294),d=h("iterator"),A=!1;[].keys&&("next"in(a=[].keys())?(i=f(f(a)))!==Object.prototype&&(r=i):A=!0),!s(r)||o(function(){var t={};return r[d].call(t)!==t})?r={}:p&&(r=c(r)),u(r[d])||l(r,d,function(){return this}),t.exports={IteratorPrototype:r,BUGGY_SAFARI_ITERATORS:A}}

@@ -1,0 +1,2 @@
+// webpack module 4261
+4261:function(t,n,e){"use strict";var r,i=e(7341),a=e(1609),o=e(3895).f,u=e(3663),s=e(3576),c=e(279),f=e(6124),l=e(5524),h=e(3294),p=a("".slice),d=Math.min,A=l("startsWith");i({target:"String",proto:!0,forced:!(!h&&!A&&(r=o(String.prototype,"startsWith"))&&!r.writable)&&!A},{startsWith:function(t){var n=s(f(this));c(t);var e=u(d(arguments.length>1?arguments[1]:void 0,n.length)),r=s(t);return p(n,e,e+r.length)===r}})}

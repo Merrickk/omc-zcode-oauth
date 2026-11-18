@@ -1,0 +1,2 @@
+// webpack module 9845
+9845:function(t,n,e){"use strict";var r=e(5085),i=e(7670),a=e(4677),o=e(555),u=TypeError,s="Reduce of empty array with no initial value",c=function(t){return function(n,e,c,f){var l=i(n),h=a(l),p=o(l);if(r(e),0===p&&c<2)throw new u(s);var d=t?p-1:0,A=t?-1:1;if(c<2)for(;;){if(d in h){f=h[d],d+=A;break}if(d+=A,t?d<0:p<=d)throw new u(s)}for(;t?d>=0:p>d;d+=A)d in h&&(f=e(f,h[d],d,l));return f}};t.exports={left:c(!1),right:c(!0)}}

@@ -1,0 +1,2 @@
+// webpack module 8047
+8047:function(t,n,e){"use strict";var r=e(2814),i=e(1573),a=e(3576),o=e(6124),u=r("".charAt),s=r("".charCodeAt),c=r("".slice),f=function(t){return function(n,e){var r,f,l=a(o(n)),h=i(e),p=l.length;return h<0||h>=p?t?"":void 0:(r=s(l,h))<55296||r>56319||h+1===p||(f=s(l,h+1))<56320||f>57343?t?u(l,h):r:t?c(l,h,h+2):(r-55296<<10)+(f-56320)+65536}};t.exports={codeAt:f(!1),charAt:f(!0)}}

@@ -167,3 +167,35 @@ This is the complete static and dynamic reverse engineering of the live
 dynamicJS builds observed in this session. Behavioural decisions in Aliyun's
 server-side risk engine are outside the JavaScript bundle and are not part of
 this artifact.
+
+## Webpack decomposition
+
+`webpack_modules/` contains the complete unpacked module set of `pe084`
+(294 modules plus a manifest). `app_iife_084.js` is the separated top-level
+application IIFE (about 246 KB) that starts immediately after the webpack
+runtime and contains the obfuscated verification program. Together with the raw
+bundle this is the complete decomposition of dynamicJS into:
+
+- standard webpack vendor/polyfill modules,
+- the application IIFE,
+- the custom VM subprogram embedded in that IIFE.
+
+The largest webpack modules are core-js internals (module 204 is URL
+polyfill code); the program-specific constants and state machine live in the
+top-level app IIFE, not in the vendor modules.
+
+## Completion audit
+
+- Raw bundle: captured and versioned (two independent builds).
+- Webpack layer: unpacked into 294 modules with manifest.
+- Application IIFE: extracted as a standalone file.
+- Custom VM: full source recovered, 56 opcodes enumerated.
+- VM program: bytecode, constants, entry state, argument state and disassembly
+  captured for the verification run.
+- Data path: TrackList plaintext, deflate stream, all btoa/atob calls, and the
+  final 200-byte `CaptchaVerifyParam.data` blob captured in one flow.
+- Server protocol: InitCaptchaV3 and VerifyCaptchaV3 request shapes documented
+  in `../ALIYUN_PROTOCOL.md`.
+
+This completes the reverse engineering of the dynamicJS artifact observed in
+this research. Server-side risk scoring remains outside the bundle.
