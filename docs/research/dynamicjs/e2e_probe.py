@@ -36,7 +36,13 @@ def main():
     device_id = f"{p.APP_KEY}-h-{now}-{secrets_hex(16)}"
     fingerprint = json.loads(FINGERPRINT.read_text())
     # Fingerprint capture is a JSON object with obfuscated field names. Convert to ordered values.
-    fields = [str(fingerprint[k]) for k in sorted(fingerprint.keys())]
+    def js_str(v):
+        if v is True: return "true"
+        if v is False: return "false"
+        if v is None: return ""
+        if isinstance(v, list): return ",".join(str(x) for x in v)
+        return str(v)
+    fields = [js_str(v) for v in fingerprint.values()]
     token = p.make_device_token(device_id, key, fields, preid=True)
 
     host, resp = p.init_captcha()
@@ -64,7 +70,7 @@ def main():
         "TrackList": {"mc": "", "tc": "", "mu": "", "te": "", "mp": "", "tmv": "", "ks": "", "fi": "", "startTime": now},
         "TrackStartTime": now,
         "VerifyTime": now + 8,
-        "arg": base64.b64encode(os.urandom(8)).decode(),
+        "arg": base64.b64encode(os.urandom(12)).decode(),
     }
     data = gen_data(digest, track, key)
     print("DATA", data[:80], "len", len(data))

@@ -319,3 +319,18 @@ The generated data blob length increased to 264 chars, close to but not the
 protocol envelope is accepted, F017 is now treated as a field-level mismatch
 between the generated token/fingerprint/data tuple and the server's expected
 session state.
+
+## E2E key relationship status
+
+A full fresh e2e run now produces:
+
+- `WEB_PREID` token with the correct 5-part layout and matching field lengths
+- a 268-char `data` blob
+
+Verify still returns `F017`. The remaining mismatch is therefore not structural
+(prefix/version/field lengths) but semantic: the encrypted fingerprint inside
+`deviceToken` and/or the track payload must be derived from the same session
+state and browser-consistent values. Decrypting token field 2 with the known
+static keys does not produce plaintext, confirming that the session key is
+derived/transported elsewhere in the live run and must be captured per-session
+for exact reproduction.
