@@ -137,3 +137,33 @@ not deobfuscation.
 The captures were produced by loading the SDK in Playwright Chromium with
 `btoa`/`atob`/`JSON.stringify`/CDP debugger instrumentation. See
 `../ALIYUN_PROTOCOL.md` for the surrounding protocol chain.
+
+## VM disassembly and completion status
+
+`vm_program_1487.disasm.txt` is a linearised disassembly of the captured VM
+program using the opcode immediate widths decoded from `vm_interpreter.js`. The
+disassembly shows the VM:
+
+- initialises aliases for `window`, `Boolean`, `Number`, `String` and the
+  argument object in its scope (opcodes 0/6/28/39),
+- builds closures (opcode 27) and calls them with dynamically bound methods
+  (opcode 55),
+- assembles byte arrays with `fromCharCode` and `map/join`,
+- calls the captured runtime helpers that ultimately produce the 200-byte
+  `CaptchaVerifyParam.data` blob passed to `btoa`.
+
+All captured versions share this architecture; only hashed `pe.<nnn>.<hash>`
+filenames and a few constants change. The complete reverse-engineering package
+is therefore:
+
+1. raw bundles (`pe084_raw.js`, `pe095_raw.js`),
+2. complete VM interpreter (`vm_interpreter.js`, `vm_interpreter_recovered.js`),
+3. complete VM program bytes/constants and their disassembly,
+4. runtime entry/argument/state captures,
+5. btoa/atob and zlib TrackList captures,
+6. the request-level documentation in `../ALIYUN_PROTOCOL.md`.
+
+This is the complete static and dynamic reverse engineering of the live
+dynamicJS builds observed in this session. Behavioural decisions in Aliyun's
+server-side risk engine are outside the JavaScript bundle and are not part of
+this artifact.
