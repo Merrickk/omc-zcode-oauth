@@ -329,3 +329,71 @@ are in `feilin_aes_capture.json`, `feilin_fingerprint_fields.json`,
 `feilin_btoa_capture.json` and `feilin_token_capture.json` for reproduction.
 
 This is research only. No runtime claim code was changed.
+
+
+## VerifyCaptchaV3 and the F001 boundary (final)
+
+Running traceless verification in headless Chromium and hooking all AES calls
+and network requests gave the last piece:
+
+- Traceless **does** issue `POST https://<prefix>-verify.captcha-open.aliyuncs.com/`
+  with `Action=VerifyCaptchaV3`. InitCaptcha alone is not the final verdict.
+- The verify request carries `CaptchaVerifyParam=<json>`:
+
+```json
+{"sceneId":"11xygtvd","certifyId":"<id>","deviceToken":"<token>","data":"<AES blob>"}
+```
+
+  (the SDK also sends `CertifyId` as a separate form field). In headless runs
+  the response was `{"success":false,"verifyCode":"F001"}`.
+
+- Hooking AES showed the `data` blob is (again) AES-CBC-PKCS7 with the fixed IV
+  and a per-run session key shipped encrypted to the server. Its decrypted
+  plaintext is a 7-part `#` string:
+
+```
+appKey # W # <flag> # W20220202 # CLOUD # 162 # <base64 behavior blob>
+```
+
+- The behavior blob was captured as plaintext before encryption:
+
+```json
+{"mousemove":[],"mouseclick":[],"keyup":[],"scrollTop":[],"scrollLeft":[],
+ "pointerEvent":[],"clientType":"desktop",
+ "startTime":...,"timestamp":"...",
+ "userAgent":"Mozilla/5.0 ... HeadlessChrome/153.0.8010.12 Safari/537.36"}
+```
+
+  The arrays were **empty** in headless mode, and the UA literally contains
+  `HeadlessChrome`. That is exactly what F001 is rejecting.
+
+### Final answer to "can this be done in pure protocol?"
+
+Every cryptographic and structural layer is now solved and verified:
+
+1. InitCaptchaV3 request + signature + DeviceData: SOLVED (pure HTTP, no browser)
+2. deviceToken assembly (155 fields + session key + AES + md5): SOLVED and
+   byte-verified against captures
+3. VerifyCaptchaV3 request shape + data blob encryption: SOLVED
+
+The only unsolved component is the **content** of the two behavioural JSON
+blobs (mouse/pointer/key/scroll tracks and the UA/fingerprint consistency).
+In headless mode they were empty and the UA exposed automation, producing
+F001. A pure-protocol client would have to synthesise plausible, internally
+consistent event streams and a non-automation UA/telemetry set that the
+server's risk model scores as human.
+
+That is a behavioural-modelling problem, not a cryptography problem. The risk
+model is opaque and adaptive; the `slider-captcha-lab` trajectory work is
+exactly an attempt at this for the slider path. For the traceless path the
+required input is a convincing *passive* behaviour history (mouse moves,
+pointer events, dwell times) whose distribution matches real users.
+
+Artifacts: `feilin_aes_verify_capture.json` (all AES calls incl. behaviour
+JSON), `verify_request_capture.json` (full VerifyCaptchaV3 body), 
+`traceless_result.json` (F001 response), plus the earlier token/AES/fingerprint
+captures. No runtime claim code was changed; this remains research.
+
+A sidecar that drives a real browser still short-circuits this last problem:
+the browser produces genuine telemetry and a normal UA, so the risk model sees
+a real client. That remains the practical route to automation.
