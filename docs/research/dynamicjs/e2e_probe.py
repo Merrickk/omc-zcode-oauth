@@ -37,7 +37,7 @@ def main():
     fingerprint = json.loads(FINGERPRINT.read_text())
     # Fingerprint capture is a JSON object with obfuscated field names. Convert to ordered values.
     fields = [str(fingerprint[k]) for k in sorted(fingerprint.keys())]
-    token = p.make_device_token(device_id, key, fields)
+    token = p.make_device_token(device_id, key, fields, preid=True)
 
     host, resp = p.init_captcha()
     init = json.loads(resp)
@@ -59,6 +59,8 @@ def main():
     }
     data = gen_data(digest, track, key)
     print("DATA", data[:80], "len", len(data))
+    Path("/tmp/e2e_token.txt").write_text(token)
+    Path("/tmp/e2e_data.txt").write_text(data)
     print("TOKEN", token[:80], "len", len(token))
 
     answer = p.verify_captcha(init["CertifyId"], token, data)

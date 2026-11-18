@@ -289,3 +289,19 @@ VerifyCaptchaV3 in the same run. Result:
 The request was parsed successfully (not an auth/signature/transport error).
 F017 therefore points to a field-level mismatch in the generated data/token
 relationship rather than a broken protocol envelope.
+
+## E2E mismatch indicator
+
+After switching the token to the verify-stage form (`WEB_PREID ... #0#md5`),
+the server still returned F017. A concrete mismatch remains in the generated
+`data` blob length:
+
+```text
+captured verify data: 268 base64 chars (200 bytes)
+generated e2e data:   252 base64 chars (188 bytes)
+```
+
+Since the data blob is produced by VM1487 over the deflated TrackList wrapper,
+the shorter output indicates the generated TrackList wrapper/fingerprint input
+does not match the live browser's framing exactly. This is now the primary
+local debugging target.
