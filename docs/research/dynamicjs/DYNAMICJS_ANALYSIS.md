@@ -419,3 +419,25 @@ The e2e driver now reproduces all static parts and the reduced token
 fingerprint, but the FeiLin-derived dynamic key `a549...` remains the last
 runtime-only value needed for a fresh valid `data` blob. This is the precise
 remaining work for converting F017 to T001.
+
+## DeviceToken tail/version correction
+
+Runtime MD5 hooking captured the exact final deviceToken assembly string. It is:
+
+```text
+<prefix>#<deviceId>#<cipher>#0#daye,raolewoba!
+```
+
+where `<prefix>` is `WEB` or `WEB_PREID` depending on stage. The fifth field is
+NOT an MD5 digest; `daye,raolewoba!` is a fixed salt. The fourth field is `0`,
+not `505`. The MD5 call captured (`722e...`) is the hash of the complete token
+string for an internal purpose, not the token tail.
+
+E2E token structure now matches the live token exactly:
+
+```text
+9 / 81 / 832 / 1 / 15
+```
+
+F017 still persists, so the remaining mismatch is inside the AES-encrypted
+payloads/dynamic key, not token framing.

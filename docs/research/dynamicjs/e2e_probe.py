@@ -66,7 +66,7 @@ def main():
     # Use same-session reduced fingerprint template and server-known session key.
     fp_plain_file = Path("/tmp/token_fp_plain.txt")
     fields = fp_plain_file.read_text().split("#") if fp_plain_file.exists() else [js_str(v) for v in fingerprint.values()]
-    token = p.make_device_token(device_id, key, fields, preid=False)
+    token = p.make_device_token(device_id, key, fields, preid=True)
 
     track = {
         "TrackList": {"mc": "", "tc": "", "mu": "", "te": "", "mp": "", "tmv": "", "ks": "", "fi": "", "startTime": now},
