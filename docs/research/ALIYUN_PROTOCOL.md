@@ -266,3 +266,66 @@ This is now a bounded reverse-engineering problem with a concrete target: the
 still a full SDK reimplementation (with anti-automation probes designed to make
 exactly this hard), not a small patch — which is why it remains research-only
 and no runtime claim code was changed.
+
+
+## Full deviceToken encryption chain recovered (definitive)
+
+Hooking `window.__ALIYUN_CRYPT.AES.encrypt` (the CryptoJS instance the SDK
+exposes globally) captured every AES call with plaintext, key and IV. The
+whole chain is now reproducible in code:
+
+```
+IV = ASCII "0123456789ABCDEF" for EVERY call
+
+# constants recovered from the loader's AES tables:
+req_key  = 45f8ac1e1de14397     flag_key = c175a358550d02e2
+access   = FqJB6iRNVYdEGpwb
+
+call #0: AES(flag_key, "W.10001.c#saf-captcha#11xygtvd#captcha-normal#no8xfe#cn")
+         -> inner captcha flag (InitCaptcha DeviceData)
+call #1: AES(req_key,  "<appKey>#W#<flag>#W20220202#CLOUD#")  -> InitCaptcha DeviceData
+call #2: AES(access,   "<random 16-hex session key>")        -> transports the session key
+call #3: AES(access,   "<deviceId>")                          -> transports the device id
+call #4: AES(<session key>, "<W.10056#1.5#... 155 fields ...>")  -> FINGERPRINT CIPHER
+call #5-8: AES(<session key>, "saf-captcha"/"W.10056"/ts/"W.10056#saf-captcha#scene")
+call #9: AES(req_key, "<appKey>#W#<flag2>#W20220202#CLOUD#415#501#<b64 deviceId>#...")
+call #10-11: AES(<session key>, second fingerprint dict
+```
+
+Verified with PyCryptodome: encrypting the captured call-#4 plaintext with the
+captured key and IV reproduces byte-for-byte the `#`-field-2 value seen in the
+btoa capture (`j6csgHVJqz+...`). That is conclusive proof of the algorithm.
+
+So the encrypted fingerprint field is simply:
+
+```
+Base64( AES-CBC-PKCS7( key=<16-byte session key>, iv="0123456789ABCDEF",
+                       plaintext="<155 field values joined with #>" ) )
+```
+
+and the session key plus device id are themselves encrypted with the static
+`access` key and shipped to Aliyun in the request (call #2/#3/#9), so the
+server can decrypt the fingerprint. There is no server-issued token involved
+in `getToken()`: it is entirely local AES assembly, matching the earlier
+observation that no network call happens during token generation.
+
+### What a pure-protocol implementation now needs
+
+1. Generate deviceId `<appKey>-h-<epoch_ms>-<32hex>` (itself encrypted via
+   call #3 with the static `access` key).
+2. Generate a random 16-hex session key, encrypt it via call #2.
+3. Build the 155-field fingerprint string with self-consistent values.
+4. Encrypt it (call #4), assemble
+   `base64("WEB#<deviceId>#<cipher>#505#<md5>")`.
+5. Transmit the encrypted key/deviceId exactly as calls #9 and InitCaptcha do,
+   so the server can decrypt and verify.
+
+The crypto is fully solved and verified. What remains is (a) choosing field
+values the server's risk model accepts — the values must be internally
+consistent (canvas data URL, WebGL hashes, font metrics, IP, UA, timezone) and
+plausible for the claimed platform, and (b) submitting them coherently with
+`DeviceData` in InitCaptcha. The complete captured plaintexts and cipher calls
+are in `feilin_aes_capture.json`, `feilin_fingerprint_fields.json`,
+`feilin_btoa_capture.json` and `feilin_token_capture.json` for reproduction.
+
+This is research only. No runtime claim code was changed.
