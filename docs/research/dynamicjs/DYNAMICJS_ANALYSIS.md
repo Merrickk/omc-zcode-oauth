@@ -275,3 +275,17 @@ SignatureNonce returned:
 
 So `certifyId`, `deviceToken` and/or `data` are single-use/time-bound; replay
 tests must generate a fresh InitCaptcha + TrackList + data in the same run.
+
+## End-to-end pure-protocol probe result
+
+A local e2e probe (`e2e_probe.py`) generated a fresh InitCaptchaV3, a fresh
+deviceToken and a fresh `data` blob from the offline VM, then submitted
+VerifyCaptchaV3 in the same run. Result:
+
+```json
+{"VerifyCode":"F017","VerifyResult":false}
+```
+
+The request was parsed successfully (not an auth/signature/transport error).
+F017 therefore points to a field-level mismatch in the generated data/token
+relationship rather than a broken protocol envelope.
