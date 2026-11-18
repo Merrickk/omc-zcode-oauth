@@ -199,3 +199,36 @@ top-level app IIFE, not in the vendor modules.
 
 This completes the reverse engineering of the dynamicJS artifact observed in
 this research. Server-side risk scoring remains outside the bundle.
+
+## Offline reproduction of `CaptchaVerifyParam.data`
+
+The decisive call was captured by wrapping the VM function and recording all
+returns. The final data blob was return #11 of VM program 1487:
+
+```text
+n = 0
+arguments[0] = zlibBase64(TrackListWrapper)
+arguments[1] = 16-hex session key
+return = CaptchaVerifyParam.data (base64, 268 chars)
+```
+
+Example captured input:
+
+```text
+eJx1jcsKwjAQRf9l1gHzMJ200EV...   (deflate of TrackList JSON)
+3e627e1b4c63f913                 (session key)
+```
+
+The offline runner `data_blob_generator.js` accepts those two inputs and runs
+the recovered VM. Using the captured zlib base64 and session key, it reproduces
+the captured data blob byte-for-byte:
+
+```text
+equal: true
+```
+
+This closes the `TrackList -> data` path: the dynamicJS VM program 1487 is the
+final encoder. Note that the zlib bytes must match the browser/pako output;
+Node's `zlib.deflateSync` output differs in compression framing, so the
+generator accepts the exact zlib base64 when byte-identical reproduction is
+required.
