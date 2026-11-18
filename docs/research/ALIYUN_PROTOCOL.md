@@ -397,3 +397,34 @@ captures. No runtime claim code was changed; this remains research.
 A sidecar that drives a real browser still short-circuits this last problem:
 the browser produces genuine telemetry and a normal UA, so the risk model sees
 a real client. That remains the practical route to automation.
+
+
+## The last field: CaptchaVerifyParam.data (status)
+
+A clean single-run trace (`verify_data_trace.json`, `cvp_construction_stack.json`)
+established:
+
+- `CaptchaVerifyParam = {sceneId, certifyId, deviceToken, data}`.
+- `data` is a 200-byte binary blob (268 base64 chars), with a stable leading
+  structure across runs (`JRMlgg...`) and session-varying tail.
+- It matches **none** of the 8 CryptoJS AES ciphertexts in the same run, and
+  none of the Base64.stringify outputs. Its construction is inside
+  `dynamicJS/3.29.0/pe.*.js`, reached via the FeiLin stringify hook — i.e. it
+  is produced by the dynamic bundle, not by the loader's CryptoJS chain that
+  we already reconstructed.
+- Headless traceless verification still returns F001 with empty event tracks
+  and a `HeadlessChrome` UA, regardless of the solved deviceToken chain.
+
+So the remaining unknowns are both inside the dynamic bundle:
+1. how the `data` blob is derived (its cipher/encoding and inputs), and
+2. what behaviour telemetry the risk model requires.
+
+Everything before that — scene config, POP signing, InitCaptchaV3, the
+155-field fingerprint dictionary, deviceToken AES assembly with the
+per-session key transport, and the verify request envelope — is captured,
+implemented in `pure_protocol_prototype.py`, and reproducible.
+
+Further progress on `data` requires deobfuscating `dynamicJS/3.29.0/pe.*.js`
+(≈450 KB, separately versioned) and hooking its internal primitives. That is a
+distinct reverse-engineering task from the loader/FeiLin work already done.
+No runtime claim code was changed by this research.
