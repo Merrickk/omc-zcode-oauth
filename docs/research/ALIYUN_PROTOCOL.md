@@ -200,3 +200,69 @@ $$
 The practical consequence is unchanged: a real browser (the shipped page, or
 a headless Playwright sidecar) is required to mint deviceToken. No runtime code
 was altered by this research.
+
+## Encrypted-payload plaintext dumped from a real browser (latest)
+
+Rather than statically guessing, the FeiLin script was run in a real Chromium
+via Playwright while hooking `btoa` and `JSON.stringify`. That exposed the
+**plaintext immediately before encryption**:
+
+`deviceToken` (the decoded value of `window.um.getToken()`) is:
+
+```
+base64( "WEB#<deviceId>#<encrypted-fingerprint>#505#<md5>" )
+```
+
+- `deviceId` = `<appKey>-h-<epoch_ms>-<32hex>` — the same id shipped inside the
+  InitCaptcha `DeviceConfig` response.
+- `505` is a constant build/version tag.
+- the final 32-hex is an integrity digest of the preceding fields.
+
+The btoa hook also captured the pre-encryption assembly:
+
+1. A **155-field JSON dictionary** with deliberately meaningless keys
+   (`dghfh565`, `asdfasdf`, `sdfgsdf`, ...). Full capture:
+   `feilin_fingerprint_fields.json`. Values include:
+   - platform/version (`W.10056`, `1.5`, `11`)
+   - renderer (`Blink`), OS (`Linux x86_64`), browser (`Chrome Headless`,
+     `153.0.8010.12`), UA, language (`en-US`), timezone (`Asia/Shanghai`)
+   - WebGL vendor/renderer (`Google Inc.`, `ANGLE ... SwiftShader`), a WebGL
+     hash, canvas rendering data URL, dozens of canvas color probes
+   - font metrics (`20-442|23-690|...`), screen/viewport (`1440*2560`), dpr,
+     color depth, touch/keyboard/plugin flags
+   - many `<md5-ish>:width:height` texture hashes, timing values (`GatherCost`),
+     and hard-coded 0/1 capability flags.
+2. A compact feature-flag string:
+   `0#515#1#0#...#1#1#1#11111110111111111111111111`
+   (also visible as `dfsf3244` in the dictionary).
+3. That 155-field dict is serialised, encrypted/compressed into a raw blob
+   (observed: 2188 bytes), base64'd, and embedded as field 3 of the token.
+
+The encryption key for the fingerprint blob is **not** any of the static keys
+recovered from the loader (`87f8...`, `45f8...`, `c175...`, appKey, deviceId,
+md5 were all tried and failed). It is derived at runtime, presumably bound to
+the device/session, which is why the captured first bytes
+(`9e6d867c4ee82df0...`) do not decrypt with those constants.
+
+### What "forge the environment" would actually require
+
+This dump turns the question from abstract into concrete. Forging a token
+outside a browser would require:
+
+1. Producing all 155 field values self-consistently (the canvas data URL,
+   WebGL hashes, font metrics and texture hashes are mutually dependent and
+   device-specific; the values seen here come from a real Linux/Chromium
+   instance and are not interchangeable).
+2. Reproducing the runtime key derivation and the compression/encryption that
+   turns the dict into the 2188-byte cipher blob.
+3. Keeping pace with the `1.5.4`/`505` build numbers and key schedule as the
+   vendor ships new FeiLin versions.
+4. Most importantly, having the forged fingerprint agree with the `DeviceData`
+   submitted in InitCaptcha and with the server-side risk model that scores
+   `VerifyCaptchaV3`.
+
+This is now a bounded reverse-engineering problem with a concrete target: the
+155-field plaintext and its cipher blob are captured and reproducible. It is
+still a full SDK reimplementation (with anti-automation probes designed to make
+exactly this hard), not a small patch — which is why it remains research-only
+and no runtime claim code was changed.
