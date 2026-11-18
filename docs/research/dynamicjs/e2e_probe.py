@@ -32,7 +32,7 @@ def gen_data(digest, track, key):
 def main():
     now = int(time.time() * 1000)
     digest = base64.b64decode("ZGU2Mzg1YjFkYTE5ZmVkMg==").decode() if False else secrets_hex(16)
-    key = secrets_hex(8)
+    key = None  # derived from DeviceConfig after InitCaptcha
     device_id = f"{p.APP_KEY}-h-{now}-{secrets_hex(16)}"
     fingerprint = json.loads(FINGERPRINT.read_text())
     # Fingerprint capture is a JSON object with obfuscated field names. Convert to ordered values.
@@ -42,14 +42,6 @@ def main():
         if v is None: return ""
         if isinstance(v, list): return ",".join(str(x) for x in v)
         return str(v)
-    # Prefer the exact same-session fingerprint plaintext captured from a live
-    # browser. The generic field dump has a different field count/framing.
-    fp_plain_file = Path("/tmp/token_fp_plain.txt")
-    if fp_plain_file.exists():
-        fields = fp_plain_file.read_text().split("#")
-    else:
-        fields = [js_str(v) for v in fingerprint.values()]
-    token = p.make_device_token(device_id, key, fields, preid=False)
 
     host, resp = p.init_captcha()
     init = json.loads(resp)
@@ -61,16 +53,20 @@ def main():
     cfg = dec_deviceconfig(init["DeviceConfig"])
     parts = cfg.split("#")
     if len(parts) >= 1:
-        digest = parts[0]
-        try:
-            digest = base64.b64decode(digest + "=" * (-len(digest) % 4)).decode()
-            # Live TrackList prefixes are 32 hex chars; DeviceConfig seed is 16 hex.
-            digest = (digest * 2)[:32]
-        except Exception:
-            pass
-    if True:
+        # DeviceConfig field 0 is base64 of the 16-hex session key. The live
+        # client uses this exact value as the AES key for both the deviceToken
+        # fingerprint and the VerifyCaptchaV3 data blob.
+        key = base64.b64decode(parts[0] + "=" * (-len(parts[0]) % 4)).decode()
+        digest = key * 2
+    if not key or len(digest) != 32:
         import secrets as _secrets
-        digest = _secrets.token_hex(16)
+        key = _secrets.token_hex(8)
+        digest = key * 2
+    print("KEY", key, "DIGEST", digest[:16] + "...")
+    # Use same-session reduced fingerprint template and server-known session key.
+    fp_plain_file = Path("/tmp/token_fp_plain.txt")
+    fields = fp_plain_file.read_text().split("#") if fp_plain_file.exists() else [js_str(v) for v in fingerprint.values()]
+    token = p.make_device_token(device_id, key, fields, preid=False)
 
     track = {
         "TrackList": {"mc": "", "tc": "", "mu": "", "te": "", "mp": "", "tmv": "", "ks": "", "fi": "", "startTime": now},

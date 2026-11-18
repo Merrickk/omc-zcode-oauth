@@ -373,3 +373,18 @@ generating a 268-char data blob and a token with matching real-world field
 lengths. Verify still returns F017, confirming that token framing is now correct
 and the remaining issue is the dynamic key/hash relationship inside `data` for
 a fresh session.
+
+## Session key source
+
+The dynamic 16-hex key used as AES key for the deviceToken fingerprint and as
+the TrackList/data AES key is not arbitrary. It is stored in the InitCaptcha
+`DeviceConfig` plaintext field 0, base64-encoded:
+
+```text
+DeviceConfig field0 = base64("de6385b1da19fed2")
+session key          = de6385b1da19fed2
+```
+
+The e2e driver was changed to derive the key from `DeviceConfig`. Data length
+returned to 252 chars because the TrackList digest prefix must be the 32-hex
+value from the TrackList builder, not simply the session key repeated.
