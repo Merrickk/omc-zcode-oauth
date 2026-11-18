@@ -56,14 +56,15 @@ def init_device_data(scene=SCENE_ID):
     flag = aes_b64(FLAG_KEY, f"{PLATFORM}#{APP_NAME}#{scene}#captcha-front#{PREFIX}#{REGION}")
     return aes_b64(REQ_KEY, f"{APP_KEY}#W#{flag}#{APP_VERSION}#CLOUD#")
 
-def make_device_token(device_id: str, session_key: str, fingerprint_fields: list, extra=()):
+def make_device_token(device_id: str, session_key: str, fingerprint_fields: list, preid: bool = False):
     """Assemble the exact deviceToken layout captured from window.um.getToken()."""
     # fingerprint_fields: ordered list of the 155 string values (empty string for absent)
     fp_plain = "#".join(str(v) for v in fingerprint_fields)
     fp_cipher = aes_b64(session_key, fp_plain)
-    parts = ["WEB", device_id, fp_cipher, "505"]
-    tail = hashlib.md5("#".join(parts).encode()).hexdigest()
-    token = "#".join(parts + [tail])
+    parts = ["WEB_PREID" if preid else "WEB", device_id, fp_cipher, "0"]
+    # The live Aliyun client appends a fixed salt, not an MD5 digest. Runtime
+    # CryptoJS MD5 hook captured exactly: "daye,raolewoba!".
+    token = "#".join(parts + ["daye,raolewoba!"])
     return base64.b64encode(token.encode()).decode()
 
 def pop_sign(params: dict, secret=AK_SECRET) -> str:
