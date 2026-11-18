@@ -400,3 +400,22 @@ The key is FeiLin-side derived; the e2e driver currently has the full encrypted
 payload structure but does not yet reproduce this FeiLin key derivation from a
 fresh InitCaptcha session. This is the concrete remaining blocker for turning
 F017 into T001.
+
+## Key relationships from combined capture
+
+A single run captured these key assignments:
+
+- DeviceConfig session key: `de6385b1da19fed2` (from AES2 plaintext).
+- Device ID is encrypted with static `FqJB6iRNVYdEGpwb`.
+- DeviceToken field 2 is AES-CBC of the 619-byte reduced fingerprint with key
+  `de6385b1da19fed2` (AES10).
+- Verify payload data uses AES key `a549a55c60a39aa0` (AES9), which is parsed
+  from a FeiLin helper call (`ro/rM`) and is distinct from the DeviceConfig
+  session key.
+- AES0/AES1 (InitCaptcha `DeviceData`) use `c175a...` and `45f8...`; AES2/AES3
+  transport the DeviceConfig session key and device id with `FqJB...`.
+
+The e2e driver now reproduces all static parts and the reduced token
+fingerprint, but the FeiLin-derived dynamic key `a549...` remains the last
+runtime-only value needed for a fresh valid `data` blob. This is the precise
+remaining work for converting F017 to T001.
