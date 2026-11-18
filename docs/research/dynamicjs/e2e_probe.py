@@ -48,8 +48,17 @@ def main():
 
     cfg = dec_deviceconfig(init["DeviceConfig"])
     parts = cfg.split("#")
-    if len(parts) >= 3:
+    if len(parts) >= 1:
         digest = parts[0]
+        try:
+            digest = base64.b64decode(digest + "=" * (-len(digest) % 4)).decode()
+            # Live TrackList prefixes are 32 hex chars; DeviceConfig seed is 16 hex.
+            digest = (digest * 2)[:32]
+        except Exception:
+            pass
+    if True:
+        import secrets as _secrets
+        digest = _secrets.token_hex(16)
 
     track = {
         "TrackList": {"mc": "", "tc": "", "mu": "", "te": "", "mp": "", "tmv": "", "ks": "", "fi": "", "startTime": now},

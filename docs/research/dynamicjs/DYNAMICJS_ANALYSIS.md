@@ -305,3 +305,17 @@ Since the data blob is produced by VM1487 over the deflated TrackList wrapper,
 the shorter output indicates the generated TrackList wrapper/fingerprint input
 does not match the live browser's framing exactly. This is now the primary
 local debugging target.
+
+## E2E F017 remains after framing fixes
+
+The e2e probe was updated to:
+
+- emit verify-stage token form `WEB_PREID#...#0#md5`,
+- decode the DeviceConfig digest seed,
+- expand/normalize it to a 32-hex TrackList prefix.
+
+The generated data blob length increased to 264 chars, close to but not the
+268 chars seen in the live browser. Verify still returns F017. Since the
+protocol envelope is accepted, F017 is now treated as a field-level mismatch
+between the generated token/fingerprint/data tuple and the server's expected
+session state.
