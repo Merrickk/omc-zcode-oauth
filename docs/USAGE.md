@@ -452,3 +452,25 @@ contain the business token those endpoints require.
   credential may have no active bucket containing that model.
 - **A 3012 marker blocks calls:** check the account in ZCode. Only remove the
   marker after the vendor clears the account.
+## Automatic claim with the built-in captcha solver
+
+Since 0.4.0 the plugin embeds the captcha solver assets inside the shared
+library. No separate solver service is required. The plugin materializes the
+scripts into a temporary directory, launches a one-shot local solver, obtains a
+T001 `CaptchaVerifyParam`, and submits the claim with the native ZCode headers.
+
+Requirements on the CPA host:
+
+- Linux host
+- `node`, `python3`, `xvfb-run` on PATH
+- Python packages: `opencv-python`, `numpy`, `captcha-recognizer`
+- a full Chromium binary (set `CHROME_BIN` when it is not in the default path)
+
+Authenticated Management API route:
+
+```text
+POST /v0/management/plugins/omc-zcode-oauth/claim/auto
+{"auth":"<credential file>","plan_id":"<optional>","captcha_region":"cn","activate":true}
+```
+
+The embedded claim page also exposes an "自动领取（内建验证码）" button.

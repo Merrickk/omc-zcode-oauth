@@ -99,8 +99,8 @@ def smoke(library, version, descriptor):
         if [entry.get("menu") or "" for entry in resources] != ["", "", "活动领取", ""]:
             raise ValueError("only the claim page may declare a console menu")
         routes = management.get("routes") or []
-        if len(routes) != 5 or any(not route.get("path", "").startswith(f"/v0/management/plugins/{PLUGIN_ID}/claim/") for route in routes):
-            raise ValueError("native management routes must be exactly the five claim API endpoints")
+        if len(routes) != 6 or any(not route.get("path", "").startswith(f"/v0/management/plugins/{PLUGIN_ID}/claim/") for route in routes):
+            raise ValueError("native management routes must be exactly the six claim API endpoints")
         prefix = f"/v0/resource/plugins/{PLUGIN_ID}"
         assets = {"omc.json": (descriptor, "application/json; charset=utf-8")}
         for name in ("zai.png", "bigmodel.png"):

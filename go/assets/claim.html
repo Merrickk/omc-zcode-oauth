@@ -50,6 +50,7 @@
 
 <div class="row">
   <button id="btn-plans" class="primary">查询可领取的套餐</button>
+  <button id="btn-auto">自动领取（内建验证码）</button>
   <button id="btn-activate">手动上报活跃事件</button>
   <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 领取前自动上报</label>
 </div>
@@ -419,6 +420,27 @@
     const out = await call("GET", CLAIM_API + "/plans?auth=" + encodeURIComponent(name));
     renderPlans(out.plans);
   }
+
+  $("btn-auto").addEventListener("click", async () => {
+    const name = selectedAuth();
+    if (!name) { status("请先选择或填写凭据文件名", "err"); return; }
+    $("btn-auto").disabled = true;
+    try {
+      status("正在调用插件内建验证码求解并完成领取…");
+      const out = await call("POST", CLAIM_API + "/auto", {
+        auth: name,
+        plan_id: "",
+        captcha_region: (captchaCfg && captchaCfg.region) || "cn",
+        activate: $("activate").checked,
+      });
+      status("自动领取结果：solved=" + out.solved + " claimed=" + out.claimed + (out.message ? " msg=" + out.message : ""), out.claimed ? "ok" : "err");
+      await refreshPlans();
+    } catch (e) {
+      status("❌ 自动领取失败：" + e.message, "err");
+    } finally {
+      $("btn-auto").disabled = false;
+    }
+  });
 
   $("btn-plans").addEventListener("click", async () => {
     $("btn-plans").disabled = true;

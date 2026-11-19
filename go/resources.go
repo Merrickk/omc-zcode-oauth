@@ -152,6 +152,7 @@ func claimRoutes() []map[string]any {
 		{"method": http.MethodGet, "path": claimAPIPrefix + "/captcha-config", "menu": "", "description": desc},
 		{"method": http.MethodPost, "path": claimAPIPrefix + "/activate", "menu": "", "description": desc},
 		{"method": http.MethodGet, "path": claimAPIPrefix + "/ping", "menu": "", "description": desc},
+		{"method": http.MethodPost, "path": claimAPIPrefix + "/auto", "menu": "", "description": "Solve captcha in-process and claim automatically."},
 	}
 }
 
@@ -210,6 +211,19 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 			return managementError(0, err), true
 		}
 		return managementJSON(http.StatusOK, map[string]any{"activated": true}), true
+
+	case sub == "/auto" && req.Method == http.MethodPost:
+		body, err := decodeAutoClaimBody(req.Body)
+		if err != nil {
+			return managementJSON(http.StatusBadRequest, map[string]string{"error": err.Error()}), true
+		}
+		if body.Auth == "" {
+			body.Auth = req.Query.Get("auth")
+		}
+		unlock := claimLock(body.Auth)
+		defer unlock()
+		out := autoClaim(claimSender(), dir, body)
+		return managementJSON(http.StatusOK, out), true
 
 	case sub == "/claim" && req.Method == http.MethodPost:
 		var body struct {

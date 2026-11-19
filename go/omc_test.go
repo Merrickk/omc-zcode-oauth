@@ -64,8 +64,8 @@ func TestOMCResourceRegistrationIsStaticOnly(t *testing.T) {
 	if err := json.Unmarshal(raw, &registration); err != nil {
 		t.Fatal(err)
 	}
-	if len(registration.Routes) != 5 || len(registration.Resources) != 4 {
-		t.Fatal("expected the five claim API routes, two static logos, the claim page and one optional declaration")
+	if len(registration.Routes) != 6 || len(registration.Resources) != 4 {
+		t.Fatal("expected the six claim API routes, two static logos, the claim page and one optional declaration")
 	}
 	want := []string{"/zai.png", "/bigmodel.png", "/claim.html", "/omc.json"}
 	// Only the claim page is a menu entry (a page the console can host); the
