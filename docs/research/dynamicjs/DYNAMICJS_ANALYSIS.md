@@ -457,3 +457,20 @@ The server-side risk engine rejects the headless/no-interaction session regardle
 of protocol correctness. This closes protocol debugging: all client-side
 structures are reproduced, while T001 requires a risk-accepted browser session
 (or equivalent behavioural interaction).
+
+## Behaviour-track injection
+
+A Playwright session that injected a human-like mouse path, click, keyboard-less
+movement and scroll before `startTracelessVerification()` produced a populated
+TrackList:
+
+```text
+mc/mu: populated click coordinates
+mp:    long mouse path with timestamps
+si:    screen/viewport metrics
+```
+
+The verify result was still `F001`. This confirms empty tracks were not the only
+reason for rejection; the headless/virtualized browser environment itself is
+still classified as risky. The client-side protocol is complete; the remaining
+barrier is runtime browser authenticity risk scoring.
