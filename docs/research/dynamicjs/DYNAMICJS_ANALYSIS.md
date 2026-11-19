@@ -486,3 +486,21 @@ This is the final confirmation: protocol fields, signatures, encryption, data
 blob and token are all correct (a same-session replay reaches F008; malformed
 fields produce F017/F014). The only remaining rejection is the server risk
 engine refusing an automated session. Client protocol debugging is complete.
+
+## Raw CDP-launched Chromium confirmation
+
+A final test launched full Chromium directly with `--remote-debugging-port`
+(no Playwright browser launch flags such as `--enable-automation`), connected
+over CDP under Xvfb, hid `navigator.webdriver`, injected a human-like passive
+mouse path/click/scroll, then ran `startTracelessVerification()`.
+
+Result remained:
+
+```json
+{"VerifyCode":"F001","VerifyResult":false}
+```
+
+This removes the remaining browser-automation launch artifacts as the cause.
+The client protocol is fully reproduced; Aliyun's server-side risk engine still
+requires a genuinely trusted browser/session, which cannot be replaced by
+protocol-only generation.
