@@ -20,7 +20,11 @@ class GitHub:
         result = subprocess.run(["gh", "api", f"repos/{self.repository}/releases/tags/{tag}"], capture_output=True, text=True)
         if result.returncode == 0:
             return json.loads(result.stdout)
-        if "(HTTP 404)" not in result.stderr:
+        # gh may report the REST lookup failure with either lowercase or
+        # uppercase HTTP spelling. A 404 is the only case where draft lookup
+        # through GraphQL is valid.
+        lowered = (result.stderr or "").lower()
+        if "404" not in lowered:
             raise RuntimeError("GitHub release lookup failed; refusing to infer absence")
         # REST-by-tag cannot resolve a draft's pending tag. Follow gh's own
         # draft lookup: GraphQL resolves its database ID, REST returns assets.
