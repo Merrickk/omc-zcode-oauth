@@ -33,7 +33,15 @@ class GitHub:
         result = subprocess.run(["gh", "api", "graphql", "-f", "query=" + query, "-f", "owner=" + owner, "-f", "name=" + name, "-f", "tagName=" + tag], check=True, capture_output=True, text=True)
         payload = json.loads(result.stdout)
         repository = payload.get("data", {}).get("repository")
-        if payload.get("errors") or not isinstance(repository, dict) or "release" not in repository:
+        errors = payload.get("errors") or []
+        if isinstance(repository, dict) and "release" in repository and repository["release"] is None:
+            # A GraphQL "not found" may arrive as an errors entry as well as a
+            # null release. Only that exact condition means absence; every
+            # other error still refuses to infer that a release is missing.
+            messages = " ".join(str(item.get("message", "")) for item in errors if isinstance(item, dict)).lower()
+            if not errors or "could not resolve to a release" in messages or "not found" in messages:
+                return None
+        if errors or not isinstance(repository, dict) or "release" not in repository:
             raise RuntimeError("GitHub draft lookup failed; refusing to infer absence")
         draft = repository["release"]
         if draft is None:

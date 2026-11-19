@@ -302,6 +302,12 @@ class AdapterTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "draft lookup failed"):
                     self.gh.release(self.tag)
 
+    def test_graphql_release_not_found_error_means_absence(self):
+        missing = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)")
+        payload = {"errors": [{"message": "Could not resolve to a Release with the tag name of 'v0.1.4'."}], "data": {"repository": {"release": None}}}
+        with patch.object(publisher.subprocess, "run", side_effect=[missing, subprocess.CompletedProcess([], 0, json.dumps(payload), "")]):
+            self.assertIsNone(self.gh.release(self.tag))
+
     def test_graphql_transport_and_rest_id_failures_do_not_create_releases(self):
         missing = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)")
         found = subprocess.CompletedProcess([], 0, json.dumps({"data": {"repository": {"release": {"databaseId": 12}}}}), "")
