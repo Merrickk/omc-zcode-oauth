@@ -504,3 +504,26 @@ This removes the remaining browser-automation launch artifacts as the cause.
 The client protocol is fully reproduced; Aliyun's server-side risk engine still
 requires a genuinely trusted browser/session, which cannot be replaced by
 protocol-only generation.
+
+## Slider solving confirmation (T001 observed)
+
+During calibration of the YOLO-based slider gap solver under full Chromium/Xvfb,
+two runs produced `VerifyCode: T001` with `securityToken` in the VerifyCaptchaV3
+response. This confirms the full protocol is solvable when the captcha instance
+is the interactive slider and the drag lands in the accepted range. Subsequent
+reruns are stochastic (scene/gap/trajectory vary), so the checked-in
+`solver_success` snapshot is a representative capture rather than a guaranteed
+per-run result.
+
+The working approach:
+
+1. Full Chromium (not headless shell) under Xvfb with raw CDP connection.
+2. Load AliyunCaptcha.js and call `startTracelessVerification()` / click button.
+3. Capture `#aliyunCaptcha-img` and `#aliyunCaptcha-puzzle` data URLs.
+4. Run YOLO gap detection (`captcha_recognizer.slider.Slider`) and subtract
+   puzzle alpha left offset.
+5. Convert desired `piece.left` to mouse displacement via the calibrated model
+   `piece.left = 0.00355125*m² + 0.076525*m + 0.041`.
+6. Inject a human-like drag: slow approach, valley hesitation, terminal whip,
+   small settle wiggle; avoid uniform steps.
+7. Read all `-verify` responses; success is `VerifyCode:T001` + `securityToken`.
