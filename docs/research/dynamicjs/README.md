@@ -62,3 +62,15 @@ The script writes `.last_solve_result.json` (or `$OUT`) containing:
 This is the complete client-side captcha flow. It produces a valid
 `CaptchaVerifyParam` that Aliyun accepts (`T001`). The business-side claim
 call still requires a real ZCode JWT and is intentionally not embedded here.
+
+## Verification gate
+
+A live rerun of the solver completed with:
+
+```text
+YOLO conf=0.954 gap=243
+{"gap":243,"target":243,"success":true,"responses":["T001","F001","T001"]}
+```
+
+The run wrote `.last_solve_result.json` with a T001 `success` response and the
+matched `CaptchaVerifyParam` in `verifyPosts`.
