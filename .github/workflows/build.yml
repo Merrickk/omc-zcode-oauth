@@ -219,10 +219,9 @@ jobs:
           (dist / "checksums.txt").write_text("".join(path.read_text(encoding="utf-8") for path in sidecars), encoding="utf-8")
           PY
           assets=(dist/*)
-          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber "${assets[@]}"
-          else
-            gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
-              --title "${GITHUB_REF_NAME}" --generate-notes "${assets[@]}"
-          fi
+          # A failed earlier tag run can leave a draft or a partial release.
+          # The tag itself must survive; only the GitHub release is rebuilt.
+          gh release delete "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --yes --cleanup-tag=false || true
+          gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag --title "${GITHUB_REF_NAME}" --generate-notes "${assets[@]}"
           gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}"
