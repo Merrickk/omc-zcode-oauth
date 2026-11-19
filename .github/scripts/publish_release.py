@@ -53,6 +53,9 @@ class GitHub:
     def publish(self, tag):
         subprocess.run(["gh", "release", "edit", tag, "--repo", self.repository, "--draft=false"], check=True)
 
+    def delete(self, release_id):
+        subprocess.run(["gh", "api", f"repos/{self.repository}/releases/{release_id}", "--request", "DELETE"], check=True, capture_output=True, text=True)
+
     def download(self, asset):
         asset_id = asset.get("id")
         if type(asset_id) is not int or asset_id <= 0:
@@ -100,7 +103,18 @@ def publish(client, tag, paths):
     if release is None:
         client.create_draft(tag)
         release = client.release(tag)
-    missing = check_remote(client, release, tag, paths)
+    try:
+        missing = check_remote(client, release, tag, paths)
+    except ValueError:
+        # A stale draft from a failed run can hold conflicting assets for the
+        # same tag. Drafts are disposable; never delete a published release.
+        if release.get("draft"):
+            client.delete(release["id"])
+            client.create_draft(tag)
+            release = client.release(tag)
+            missing = check_remote(client, release, tag, paths)
+        else:
+            raise
     release_id = release["id"]
     if not release["draft"]:
         if missing:

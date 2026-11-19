@@ -29,6 +29,10 @@ class FakeGitHub:
         self.calls.append(("create", tag))
         self.state = {"id": 1, "tag_name": tag, "draft": True, "assets": [], "html_url": "https://github.com/test/test/releases/tag/" + tag}
 
+    def delete(self, release_id):
+        self.calls.append(("delete", release_id))
+        self.state = None
+
     def upload(self, tag, paths):
         self.calls.append(("upload", [p.name for p in paths]))
         if self.noop_upload:
@@ -104,14 +108,12 @@ class PublishTests(unittest.TestCase):
             publisher.publish(client, self.tag, self.paths)
         self.assertEqual([op for op, _ in client.calls], ["read"])
 
-    def test_conflicting_same_name_refuses_draft_or_published_overwrite(self):
-        for draft in [True, False]:
-            with self.subTest(draft=draft):
-                client = self.existing(count=3, draft=draft)
-                client.state["assets"][0]["digest"] = "sha256:" + "0" * 64
-                with self.assertRaisesRegex(ValueError, "immutable remote asset bytes conflict"):
-                    publisher.publish(client, self.tag, self.paths)
-                self.assertEqual([op for op, _ in client.calls], ["read"])
+    def test_conflicting_same_name_refuses_published_overwrite(self):
+        client = self.existing(count=3, draft=False)
+        client.state["assets"][0]["digest"] = "sha256:" + "0" * 64
+        with self.assertRaisesRegex(ValueError, "immutable remote asset bytes conflict"):
+            publisher.publish(client, self.tag, self.paths)
+        self.assertEqual([op for op, _ in client.calls], ["read"])
 
     def test_missing_digest_requires_actual_download_matching_bytes(self):
         client = self.existing(count=3, draft=False)
@@ -160,8 +162,8 @@ class PublishTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "publication did not complete"):
             publisher.publish(client, self.tag, self.paths)
 
-    def test_unknown_asset_or_changed_identity_refuses_any_mutation(self):
-        client = self.existing(count=1)
+    def test_unknown_asset_or_changed_identity_refuses_published_mutation(self):
+        client = self.existing(count=1, draft=False)
         client.state["assets"][0]["name"] = "unexpected.bin"
         with self.assertRaisesRegex(ValueError, "unexpected or duplicate"):
             publisher.publish(client, self.tag, self.paths)
@@ -193,6 +195,29 @@ class PublishTests(unittest.TestCase):
             self.assertIn("--draft=false", run.call_args.args[0])
             self.assertEqual(gh.download({"id": 12}), b"public")
             self.assertIn("repos/test/test/releases/assets/12", run.call_args.args[0])
+
+
+class StaleDraftTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.paths = {}
+        for name in ["test.zip", "test.omc.json", "checksums.txt"]:
+            path = Path(self.temp.name) / name
+            path.write_bytes(("public release bytes: " + name).encode())
+            self.paths[name] = path
+        self.tag = "v0.1.4"
+
+    def test_conflicting_draft_is_deleted_and_recreated(self):
+        client = FakeGitHub()
+        client.create_draft(self.tag)
+        client.upload(self.tag, list(self.paths.values()))
+        client.state["assets"][0]["digest"] = "sha256:" + "0" * 64
+        client.calls.clear()
+        result = publisher.publish(client, self.tag, self.paths)
+        self.assertFalse(result["draft"])
+        self.assertIn("delete", [op for op, _ in client.calls])
+        self.assertIn("create", [op for op, _ in client.calls])
 
 
 class AdapterTests(unittest.TestCase):
@@ -229,6 +254,9 @@ class AdapterTests(unittest.TestCase):
             self.assertIn("--draft", args)
             self.state = {"id": 12, "tag_name": self.tag, "draft": True, "assets": [], "html_url": "https://github.com/test/test/releases/tag/" + self.tag}
             return subprocess.CompletedProcess(args, 0)
+        if args[:3] == ["gh", "api"] and args[4:6] == ["--request", "DELETE"]:
+            self.state = None
+            return subprocess.CompletedProcess(args, 0, "")
         if args[:4] == ["gh", "release", "edit", self.tag]:
             self.assertIn("--draft=false", args)
             self.state["draft"] = False
