@@ -527,3 +527,20 @@ The working approach:
 6. Inject a human-like drag: slow approach, valley hesitation, terminal whip,
    small settle wiggle; avoid uniform steps.
 7. Read all `-verify` responses; success is `VerifyCode:T001` + `securityToken`.
+
+## Stable T001 capture with traceless-then-slider sequence
+
+A reliable T001 sequence was found: call `startTracelessVerification()` first,
+then after a delay click the captcha button so the interactive slider appears;
+capture the puzzle images and solve it with YOLO + calibrated drag. The captured
+response sequence was:
+
+```text
+#0 T001 + securityToken (success)
+#1 F008 (duplicate submission of the same certifyId)
+#2 F015 (a later fresh captifyId from the fallback slider attempt)
+```
+
+This confirms the first verify response is the authoritative success. The
+`success` JS callback was null because the SDK flow was interrupted by the
+manual sequence; the usable artifact is the T001 response with `securityToken`.
