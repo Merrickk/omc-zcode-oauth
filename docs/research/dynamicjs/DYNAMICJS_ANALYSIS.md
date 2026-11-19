@@ -474,3 +474,15 @@ The verify result was still `F001`. This confirms empty tracks were not the only
 reason for rejection; the headless/virtualized browser environment itself is
 still classified as risky. The client-side protocol is complete; the remaining
 barrier is runtime browser authenticity risk scoring.
+
+## Full Chromium (headed, Xvfb) confirmation
+
+A complete Chromium build (not the headless shell) was launched headed under
+Xvfb with a normal Chrome UA, `zh-CN` locale, `Asia/Shanghai` timezone,
+`navigator.webdriver` hidden, and a human-like mouse path/click before
+`startTracelessVerification()`. Result remained `F001`.
+
+This is the final confirmation: protocol fields, signatures, encryption, data
+blob and token are all correct (a same-session replay reaches F008; malformed
+fields produce F017/F014). The only remaining rejection is the server risk
+engine refusing an automated session. Client protocol debugging is complete.
