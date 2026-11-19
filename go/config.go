@@ -15,7 +15,10 @@ type config struct {
 	AppVersion     string `yaml:"app_version"`
 	TeamLanguage   string `yaml:"team_language"`
 	PublicBaseURL  string `yaml:"public_base_url"`
-	Site           string `yaml:"site"`
+	Site             string `yaml:"site"`
+	CaptchaChromeBin string `yaml:"captcha_chrome_bin"`
+	CaptchaNodePath  string `yaml:"captcha_node_path"`
+	CaptchaPythonBin string `yaml:"captcha_python_bin"`
 }
 
 var configMu sync.RWMutex

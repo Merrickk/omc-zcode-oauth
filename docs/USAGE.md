@@ -464,7 +464,9 @@ Requirements on the CPA host:
 - Linux host
 - `node`, `python3`, `xvfb-run` on PATH
 - Python packages: `opencv-python`, `numpy`, `captcha-recognizer`
-- a full Chromium binary (set `CHROME_BIN` when it is not in the default path)
+- a full Chromium binary (set `captcha_chrome_bin` or `CHROME_BIN` when it is not
+  in the default path); `captcha_node_path` and `captcha_python_bin` can point
+  to custom interpreters.
 
 Authenticated Management API route:
 

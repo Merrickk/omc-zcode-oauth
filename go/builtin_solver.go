@@ -66,10 +66,32 @@ func materializeBuiltinSolver() (string, error) {
 }
 
 func builtinSolverAvailable() error {
-	for _, bin := range []string{"node", "python3", "xvfb-run"} {
+	cfg := getConfig()
+	node := strings.TrimSpace(cfg.CaptchaNodePath)
+	if node == "" {
+		node = "node"
+	}
+	python := strings.TrimSpace(cfg.CaptchaPythonBin)
+	if python == "" {
+		python = "python3"
+	}
+	for _, bin := range []string{node, python, "xvfb-run"} {
 		if _, err := exec.LookPath(bin); err != nil {
-			return fmt.Errorf("built-in solver requires %s on PATH", bin)
+			return fmt.Errorf("built-in solver requires %s on PATH (configure captcha_node_path / captcha_python_bin if custom)", bin)
 		}
+	}
+	chrome := strings.TrimSpace(cfg.CaptchaChromeBin)
+	if chrome == "" {
+		chrome = os.Getenv("CHROME_BIN")
+	}
+	if chrome == "" {
+		if _, err := exec.LookPath("chromium"); err != nil {
+			if _, err := exec.LookPath("google-chrome"); err != nil {
+				return errors.New("built-in solver requires a Chromium binary; set captcha_chrome_bin or CHROME_BIN")
+			}
+		}
+	} else if _, err := os.Stat(chrome); err != nil {
+		return fmt.Errorf("configured captcha_chrome_bin is not accessible: %v", err)
 	}
 	if runtime.GOOS != "linux" {
 		return errors.New("built-in captcha solver is currently supported on Linux hosts only")
@@ -86,13 +108,28 @@ func runBuiltinCaptchaSolver(sceneID, prefix, region string) (string, error) {
 		return "", err
 	}
 	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("omc-zcode-solve-%d.json", time.Now().UnixNano()))
-	cmd := exec.Command("xvfb-run", "-a", "node", filepath.Join(dir, "solve_captcha_e2e.js"))
-	cmd.Dir = dir
+	cfg := getConfig()
+	chrome := strings.TrimSpace(cfg.CaptchaChromeBin)
+	if chrome == "" {
+		chrome = os.Getenv("CHROME_BIN")
+	}
+	node := strings.TrimSpace(cfg.CaptchaNodePath)
+	if node == "" {
+		node = "node"
+	}
+	python := strings.TrimSpace(cfg.CaptchaPythonBin)
+	if python == "" {
+		python = "python3"
+	}
+	cmd := exec.Command("xvfb-run", "-a", node, filepath.Join(dir, "solve_captcha_e2e.js"))
 	cmd.Env = append(os.Environ(),
 		"OUT="+outPath,
 		"SCENE_ID="+sceneID,
 		"PREFIX="+prefix,
 		"NODE_PATH="+os.Getenv("NODE_PATH"),
+		"CHROME_BIN="+chrome,
+		"CHROME_NODE="+node,
+		"CHROME_PYTHON="+python,
 	)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
