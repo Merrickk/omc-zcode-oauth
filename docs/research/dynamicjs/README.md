@@ -74,3 +74,18 @@ YOLO conf=0.954 gap=243
 
 The run wrote `.last_solve_result.json` with a T001 `success` response and the
 matched `CaptchaVerifyParam` in `verifyPosts`.
+
+## Business claim bridge
+
+`claim_with_captcha.py` takes a local ZCode credential JSON and a solver result
+JSON. It reads the first `CaptchaVerifyParam` from `verifyPosts`, previews
+claimable plans, and submits the highest/first plan using the exact billing
+headers from the plugin implementation. It prints only non-secret status data.
+
+```sh
+python3 docs/research/dynamicjs/claim_with_captcha.py \
+  <credential.json> docs/research/dynamicjs/.last_solve_result.json [plan_id]
+```
+
+The credential file must contain `jwt` (and optionally `device`) as in the
+plugin's credential format.
