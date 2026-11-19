@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -1333,5 +1334,31 @@ func TestCaptchaConfigToleratesVendorTyping(t *testing.T) {
 	cfg, err = captchaConfigDocument([]byte(`{"configs":{}}`))
 	if err != nil || cfg.Enabled {
 		t.Fatalf("missing captcha block must read as disabled: %+v err = %v", cfg, err)
+	}
+}
+
+func TestBuiltinCaptchaSolverAssetsEmbedded(t *testing.T) {
+	required := []string{
+		"assets/captcha_solver/solve_captcha_e2e.js",
+		"assets/captcha_solver/compute_gap_yolo.py",
+		"assets/captcha_solver/aliyunCaptcha.js",
+	}
+	for _, name := range required {
+		raw, err := builtinSolverFS.ReadFile(name)
+		if err != nil || len(raw) == 0 {
+			t.Fatalf("embedded solver asset %s missing or empty: %v", name, err)
+		}
+	}
+}
+
+func TestBuiltinCaptchaMaterializationRequiresLinux(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		if err := builtinSolverAvailable(); err == nil {
+			t.Log("host has all optional solver binaries")
+		}
+		return
+	}
+	if err := builtinSolverAvailable(); err == nil || !strings.Contains(err.Error(), "Linux") {
+		t.Fatalf("non-Linux host should report solver unsupported, got %v", err)
 	}
 }
