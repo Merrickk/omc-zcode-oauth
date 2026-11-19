@@ -34,6 +34,31 @@ type builtinSolverResult struct {
 	CaptchaVerifyParam string `json:"captcha_verify_param"`
 }
 
+func materializeBuiltinSolverForTest() (string, error) {
+	base, err := os.MkdirTemp("", "omc-zcode-solver-test-")
+	if err != nil {
+		return "", err
+	}
+	entries, err := builtinSolverFS.ReadDir("assets/captcha_solver")
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		raw, err := builtinSolverFS.ReadFile("assets/captcha_solver/" + entry.Name())
+		if err != nil {
+			return "", err
+		}
+		mode := os.FileMode(0644)
+		if strings.HasSuffix(entry.Name(), ".js") || strings.HasSuffix(entry.Name(), ".py") {
+			mode = 0755
+		}
+		if err := os.WriteFile(filepath.Join(base, entry.Name()), raw, mode); err != nil {
+			return "", err
+		}
+	}
+	return base, nil
+}
+
 func materializeBuiltinSolver() (string, error) {
 	solverGit.Lock()
 	defer solverGit.Unlock()

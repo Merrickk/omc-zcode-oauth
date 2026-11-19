@@ -1362,3 +1362,16 @@ func TestBuiltinCaptchaMaterializationRequiresLinux(t *testing.T) {
 		t.Fatalf("non-Linux host should report solver unsupported, got %v", err)
 	}
 }
+
+func TestMaterializeBuiltinSolverWritesRunnableAssets(t *testing.T) {
+	dir, err := materializeBuiltinSolverForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"solve_captcha_e2e.js", "compute_gap_yolo.py", "aliyunCaptcha.js"} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil || info.Size() == 0 {
+			t.Fatalf("materialized solver asset %s missing/empty: %v", name, err)
+		}
+	}
+}
