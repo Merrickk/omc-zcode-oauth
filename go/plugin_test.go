@@ -1173,8 +1173,10 @@ func TestClaimFlowManagementAPI(t *testing.T) {
 			}
 		}
 	}
-	if events != 2 {
-		t.Fatalf("expected two activation events, got %d", events)
+	// /plans now mirrors zcode-switch and reports presence before previewing,
+	// so the explicit /activate call adds a second pair.
+	if events != 4 {
+		t.Fatalf("expected four activation events, got %d", events)
 	}
 
 	// A claim without a captcha token is rejected before reaching upstream.
@@ -1373,5 +1375,15 @@ func TestMaterializeBuiltinSolverWritesRunnableAssets(t *testing.T) {
 		if err != nil || info.Size() == 0 {
 			t.Fatalf("materialized solver asset %s missing/empty: %v", name, err)
 		}
+	}
+}
+
+func TestBillingHeadersMatchZcodeSwitchLocale(t *testing.T) {
+	h := billingHeaders("")
+	if got := h.Get("X-Client-Language"); got != "zh-CN" {
+		t.Fatalf("X-Client-Language = %q, want zh-CN", got)
+	}
+	if got := clientTimezone(); got == "" || got == "unknown" {
+		t.Fatalf("clientTimezone = %q", got)
 	}
 }

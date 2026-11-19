@@ -123,7 +123,7 @@ func billingHeaders(token string) http.Header {
 		"X-ZCode-App-Version": {getConfig().AppVersion},
 		"X-Platform":          {zcodePlatform()},
 		"X-Release-Channel":   {"stable"},
-		"X-Client-Language":   {clientLanguage()},
+		"X-Client-Language":   {"zh-CN"},
 		"X-Client-Timezone":   {clientTimezone()},
 		"X-Os-Category":       {osCategory()},
 		"X-Os-Version":        {osRelease()},
@@ -464,9 +464,13 @@ func reportActivationEvents(sender httpSender, c credential) error {
 	if uid == "" {
 		return errors.New("account has no user identity")
 	}
-	device, err := randomUUID()
-	if err != nil {
-		return err
+	device := strings.TrimSpace(c.Device)
+	if device == "" {
+		var err error
+		device, err = randomUUID()
+		if err != nil {
+			return err
+		}
 	}
 	traceID, err := randomUUID()
 	if err != nil {
@@ -491,7 +495,7 @@ func reportActivationEvents(sender httpSender, c credential) error {
 			"app_version":        getConfig().AppVersion,
 			"device_os_category": osCategory(),
 			"device_os_version":  osRelease(),
-			"device_mid":         c.Device,
+			"device_mid":         device,
 			"mac_id":             "",
 			"marketing_params":   "{}",
 			"trace_id":           traceID,

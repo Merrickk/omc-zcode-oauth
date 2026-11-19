@@ -184,8 +184,15 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 		if err != nil {
 			return managementError(http.StatusBadRequest, err), true
 		}
+		c, err = credentialWithVirtualDevice(dir, name, c)
+		if err != nil {
+			return managementError(http.StatusBadRequest, err), true
+		}
 		unlock := claimLock(name)
 		defer unlock()
+		// zcode-switch reports presence before previewing claimable plans;
+		// without this the vendor often answers with an empty plan list.
+		_ = reportActivationEvents(claimSender(), c)
 		plans, err := previewPlans(claimSender(), c)
 		if err != nil {
 			return managementError(0, err), true

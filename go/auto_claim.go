@@ -32,6 +32,11 @@ func autoClaim(sender httpSender, dir string, req autoClaimRequest) autoClaimRes
 		result.Message = err.Error()
 		return result
 	}
+	c, err = credentialWithVirtualDevice(dir, name, c)
+	if err != nil {
+		result.Message = err.Error()
+		return result
+	}
 	planID := strings.TrimSpace(req.PlanID)
 	if planID == "" {
 		plans, err := previewPlans(sender, c)

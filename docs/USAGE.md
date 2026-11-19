@@ -344,7 +344,10 @@ is unavailable. Resets stay on the vendor website.
 ## Claiming gift plans
 
 Sign-in no longer requires an active plan: a fresh account without a plan is
-accepted and can claim one afterwards. The claim flow mirrors the vendor client
+accepted and can claim one afterwards. Claim previews now mirror zcode-switch:
+a stable per-credential virtual device id is kept in the auth directory and the
+two presence events (`app_launch`, `app_daily_active`) are reported before the
+preview request, with `X-Client-Language: zh-CN`. The claim flow mirrors the vendor client
 and is exposed as authenticated Management API routes:
 
 | Route | Purpose |

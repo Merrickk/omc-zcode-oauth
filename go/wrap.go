@@ -78,13 +78,13 @@ func cachedText(s string) map[string]any {
 	return map[string]any{"type": "text", "text": s, "cache_control": map[string]any{"type": "ephemeral"}}
 }
 func clientLanguage() string {
-	for _, k := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
-		s := os.Getenv(k)
-		if s != "" && s != "C" && s != "C.UTF-8" {
-			return strings.ReplaceAll(strings.Split(s, ".")[0], "_", "-")
-		}
+	// zcode-switch pins zh-CN for billing/activity requests. Server-side
+	// locale inference (LC_ALL/LANG) used to yield en-US/unknown inside CPA,
+	// which changed the claim context and hid claimable plans.
+	if s := strings.TrimSpace(os.Getenv("ZCODE_CLIENT_LANG")); s != "" {
+		return strings.ReplaceAll(s, "_", "-")
 	}
-	return "unknown"
+	return "zh-CN"
 }
 func clientTimezone() string {
 	if s := os.Getenv("TZ"); s != "" {
@@ -93,7 +93,7 @@ func clientTimezone() string {
 	if s := time.Now().Location().String(); s != "" && s != "Local" {
 		return s
 	}
-	return "unknown"
+	return "Asia/Shanghai"
 }
 func giftHeaders(jwt, sid string) (http.Header, error) {
 	requestID, err := randomUUID()
