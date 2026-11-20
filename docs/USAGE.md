@@ -479,3 +479,34 @@ POST /v0/management/plugins/omc-zcode-oauth/claim/auto
 ```
 
 The embedded claim page also exposes an "自动领取（内建验证码）" button.
+
+## Claim preview device identity (0.4.4)
+
+Claim eligibility is bound to the virtual device MID that `pjpv/zcode-switch`
+persists per account in `~/.zcode-switch/accounts/<id>.json`. If the plugin and
+the desktop tool use different MIDs for the same JWT, the vendor treats them as
+different devices and `billing/preview` returns an empty plan list even though
+the desktop tool shows claimable offers.
+
+The plugin now, in order:
+
+1. Reuses the exact `virtual_device_mid` from zcode-switch whose decrypted
+   `zcodejwttoken` (or JWT `user_id`) matches the credential.
+2. Falls back to the `deviceMid` in `~/.zcode/v2/telemetry-state.json`.
+3. Only as a last resort generates and persists its own stable MID.
+
+Environment overrides for non-default layouts:
+
+- `ZCODE_SWITCH_HOME` — home directory holding `.zcode-switch`
+- `ZCODE_SWITCH_DATA_ROOT` / `ZCODE_DATA_BASE_DIR` — data root holding `.zcode`
+- `ZCODE_CREDENTIAL_SECRET` — secret used by zcode-switch to encrypt credentials
+
+A diagnostic endpoint `GET .../claim/diagnose?auth=<file>` returns the raw
+`billing/preview` body together with the exact `device_mid`, `app_version` and
+`platform` used, so an empty-plan result can be traced to its source.
+
+Also aligned with zcode-switch: `billing/preview` and `billing/claim` no longer
+reject a JWT locally on `exp`; the server decides token validity. The default
+`app_version` is 3.16.3 (matching the installed ZCode client); set the
+`app_version` plugin config if your client differs, because zcode-switch reads
+the installed version from the OS registry and sends it on every billing call.

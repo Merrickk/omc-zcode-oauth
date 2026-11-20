@@ -45,7 +45,7 @@ func TestPublicResourceRegistrationIsStaticOnly(t *testing.T) {
 			t.Errorf("unexpected non-claim management route %q", route.Path)
 		}
 	}
-	if !reflect.DeepEqual(paths, []string{"/zai.png", "/bigmodel.png", "/claim.html", "/omc.json"}) || len(registration.Routes) != 6 {
+	if !reflect.DeepEqual(paths, []string{"/zai.png", "/bigmodel.png", "/claim.html", "/omc.json"}) || len(registration.Routes) != 7 {
 		t.Fatalf("public resource registration is not static-only: paths=%v routes=%v", paths, registration.Routes)
 	}
 }

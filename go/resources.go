@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -152,6 +153,7 @@ func claimRoutes() []map[string]any {
 		{"method": http.MethodGet, "path": claimAPIPrefix + "/captcha-config", "menu": "", "description": desc},
 		{"method": http.MethodPost, "path": claimAPIPrefix + "/activate", "menu": "", "description": desc},
 		{"method": http.MethodGet, "path": claimAPIPrefix + "/ping", "menu": "", "description": desc},
+		{"method": http.MethodGet, "path": claimAPIPrefix + "/diagnose", "menu": "", "description": "Raw preview response and device context for debugging."},
 		{"method": http.MethodPost, "path": claimAPIPrefix + "/auto", "menu": "", "description": "Solve captcha in-process and claim automatically."},
 	}
 }
@@ -198,6 +200,41 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 			return managementError(0, err), true
 		}
 		return managementJSON(http.StatusOK, map[string]any{"auth": name, "plans": plans}), true
+
+	case sub == "/diagnose" && req.Method == http.MethodGet:
+		name := req.Query.Get("auth")
+		c, err := claimCredential(dir, name)
+		if err != nil {
+			return managementError(http.StatusBadRequest, err), true
+		}
+		c, err = credentialWithVirtualDevice(dir, name, c)
+		if err != nil {
+			return managementError(http.StatusBadRequest, err), true
+		}
+		unlock := claimLock(name)
+		defer unlock()
+		_ = reportActivationEvents(claimSender(), c)
+		target := billingPreviewURL + "?" + url.Values{
+			"app_version": {getConfig().AppVersion},
+			"platform":    {zcodePlatform()},
+		}.Encode()
+		h := billingHeaders(c.JWT)
+		h.Set("X-Device-Mid", c.Device)
+		raw, err := claimSender().Do(pluginapi.HTTPRequest{Method: http.MethodGet, URL: target, Headers: h})
+		if err != nil {
+			return managementError(0, err), true
+		}
+		plans, parseErr := plansFromRaw(raw.Body)
+		return managementJSON(http.StatusOK, map[string]any{
+			"auth":        name,
+			"device_mid":  c.Device,
+			"app_version": getConfig().AppVersion,
+			"platform":    zcodePlatform(),
+			"status":      raw.StatusCode,
+			"raw":         string(raw.Body),
+			"plans":       plans,
+			"parse_error": fmt.Sprint(parseErr),
+		}), true
 
 	case sub == "/captcha-config" && req.Method == http.MethodGet:
 		cfg, err := fetchCaptchaConfig(claimSender())

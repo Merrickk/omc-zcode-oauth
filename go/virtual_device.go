@@ -40,6 +40,17 @@ func virtualDeviceMID(dir, authName string) (string, error) {
 }
 
 func credentialWithVirtualDevice(dir, name string, c credential) (credential, error) {
+	// Prefer the exact device identity already used by pjpv/zcode-switch.
+	// Reusing it keeps the plugin in the same device/activity context as the
+	// desktop tool, which is what billing/preview checks for eligibility.
+	if mid := zcodeSwitchMIDForJWT(c.JWT); mid != "" {
+		c.Device = mid
+		return c, nil
+	}
+	if mid := zcodeSwitchTelemetryMID(); mid != "" {
+		c.Device = mid
+		return c, nil
+	}
 	mid, err := virtualDeviceMID(dir, name)
 	if err != nil {
 		return c, err
