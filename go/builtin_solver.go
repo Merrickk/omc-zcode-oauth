@@ -25,13 +25,14 @@ var solverGit struct {
 }
 
 type builtinSolverResult struct {
-	SceneID         string   `json:"scene_id"`
-	Prefix          string   `json:"prefix"`
-	Gap             int      `json:"gap"`
-	Target          int      `json:"target"`
-	Success         bool     `json:"success"`
-	Responses       []string `json:"responses"`
-	CaptchaVerifyParam string `json:"captcha_verify_param"`
+	SceneID            string   `json:"sceneId"`
+	Prefix             string   `json:"prefix"`
+	Gap                int      `json:"gap"`
+	Target             int      `json:"target"`
+	Success            bool     `json:"success"`
+	VerifyPosts        []string `json:"verifyPosts"`
+	Responses          []string `json:"responses"`
+	CaptchaVerifyParam string   `json:"captcha_verify_param"`
 }
 
 func materializeBuiltinSolverForTest() (string, error) {
@@ -183,13 +184,22 @@ func runBuiltinCaptchaSolver(sceneID, prefix, region string) (string, error) {
 	if !result.Success {
 		return "", fmt.Errorf("captcha solver did not pass: %s", tail(stderr.String(), 800))
 	}
-	for _, post := range result.Responses {
+	if param := strings.TrimSpace(result.CaptchaVerifyParam); param != "" {
+		return param, nil
+	}
+	for _, post := range append(result.VerifyPosts, result.Responses...) {
 		values, err := url.ParseQuery(post)
 		if err != nil {
 			continue
 		}
 		if param := strings.TrimSpace(values.Get("CaptchaVerifyParam")); param != "" {
 			return param, nil
+		}
+	}
+	// Fallback scan from stdout/stderr
+	for _, line := range strings.Split(stderr.String(), "\n") {
+		if strings.HasPrefix(line, "CAPTCHA_VERIFY_PARAM=") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "CAPTCHA_VERIFY_PARAM=")), nil
 		}
 	}
 	return "", errors.New("captcha solver result has no CaptchaVerifyParam")

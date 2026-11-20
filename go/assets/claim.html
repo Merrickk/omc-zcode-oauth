@@ -216,7 +216,6 @@
     border: 1px dashed var(--border);
     border-radius: 8px;
   }
-  #cap-holder { position: fixed; top: -9999px; left: -9999px; }
 </style>
 </head>
 <body>
@@ -246,14 +245,10 @@
   <div class="empty-state">正在加载账号并检查活动资格…</div>
 </main>
 
-<div id="cap-holder"></div>
-<button id="cap-trigger-btn" style="display:none"></button>
-
 <script>
 (function() {
   "use strict";
   const CLAIM_API = "/v0/management/plugins/omc-zcode-oauth/claim";
-  const SDK_URL = "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js";
   const DEFAULT_CAMPAIGN_PLAN = {
     plan_id: "zcode-v3-start-plan-wk-1120",
     name: "ZCODE WEEKEND BUILD",
@@ -335,60 +330,6 @@
       throw new Error(`HTTP ${resp.status}: ${err}`);
     }
     return data;
-  }
-
-  function loadSdk() {
-    if (typeof window.initAliyunCaptcha === "function") return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = SDK_URL;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error("验证码组件加载失败"));
-      document.head.appendChild(s);
-    });
-  }
-
-  // Solve captcha seamlessly in browser
-  function solveInBrowser(sceneId, prefix, region) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        await loadSdk();
-      } catch (e) {
-        return reject(e);
-      }
-      window.AliyunCaptchaConfig = { region: region || "cn", prefix };
-      let done = false;
-      const fin = (param) => {
-        if (!done) {
-          done = true;
-          const token = typeof param === "string" ? param : (param && param.captchaVerifyParam);
-          if (token) resolve(String(token).trim());
-          else reject(new Error("未获取到验证参数"));
-        }
-      };
-      try {
-        window.initAliyunCaptcha({
-          SceneId: sceneId,
-          mode: "popup",
-          element: "#cap-holder",
-          button: "#cap-trigger-btn",
-          showErrorTip: false,
-          getInstance: (instance) => {
-            if (typeof instance.startTracelessVerification === "function") {
-              instance.startTracelessVerification();
-            } else {
-              document.getElementById("cap-trigger-btn").click();
-            }
-          },
-          success: fin,
-          fail: (p) => reject(new Error("验证未通过")),
-          onError: (p) => reject(new Error("验证发生异常"))
-        });
-      } catch (err) {
-        reject(err);
-      }
-      setTimeout(() => { if (!done) { done = true; reject(new Error("验证超时")); } }, 12000);
-    });
   }
 
   function renderList() {
@@ -535,43 +476,18 @@
   async function claimAccount(acc, planId) {
     acc.busy = true;
     acc.error = "";
-    acc.msg = "正在验证并领取…";
+    acc.msg = "正在全自动过滑块并领取…";
     renderList();
-    showStatus(`正在为「${acc.email || acc.name}」完成安全验证并领取…`, "info");
+    showStatus(`正在为「${acc.email || acc.name}」全自动识别滑块并领取套餐…`, "info");
 
     try {
-      // 1. 获取验证码配置
-      if (!captchaConfig) {
-        captchaConfig = await apiCall("GET", `${CLAIM_API}/captcha-config`);
-      }
-
-      let param = "";
-      // 2. 优先在当前浏览器直接执行无感验证（零服务端依赖，手机/电脑皆可秒过）
-      if (captchaConfig && captchaConfig.enabled && captchaConfig.scene_id) {
-        try {
-          param = await solveInBrowser(captchaConfig.scene_id, captchaConfig.prefix, captchaConfig.region);
-        } catch(_) {
-          // 浏览器无感未出参数时回退
-        }
-      }
-
-      let res = null;
-      if (param) {
-        // 直接提交领取的 token
-        res = await apiCall("POST", `${CLAIM_API}/claim`, {
-          auth: acc.name,
-          plan_id: planId,
-          captcha_param: param,
-          captcha_region: captchaConfig.region || "cn"
-        });
-      } else {
-        // 回退调用后端的自动求解
-        res = await apiCall("POST", `${CLAIM_API}/auto`, {
-          auth: acc.name,
-          plan_id: planId,
-          activate: true
-        });
-      }
+      // Direct call auto-claim endpoint:
+      // Background executes: activation presence -> automated captcha solve -> billing/claim
+      const res = await apiCall("POST", `${CLAIM_API}/auto`, {
+        auth: acc.name,
+        plan_id: planId,
+        activate: true
+      });
 
       if (res && (res.claimed || res.code === "0")) {
         acc.claimed = true;
@@ -581,7 +497,7 @@
         const msg = (res && (res.message || res.msg)) || "领取未成功";
         if (msg.includes("已经领取") || (res && (res.code === "1003" || res.code === 1003))) {
           acc.claimed = true;
-          acc.msg = "该账号已领取过该套餐";
+          acc.msg = "已领取过该套餐（已生效）";
           showStatus(`「${acc.email || acc.name}」已经领取过该套餐。`, "ok", 4000);
         } else {
           acc.error = msg;
@@ -592,12 +508,17 @@
       const m = e.message || String(e);
       if (m.includes("1003") || m.includes("已经领取")) {
         acc.claimed = true;
-        acc.msg = "该账号已领取过该套餐";
+        acc.msg = "已领取过该套餐（已生效）";
+        showStatus(`「${acc.email || acc.name}」已经领取过该套餐。`, "ok", 4000);
       } else {
         acc.error = m;
+        showStatus(`「${acc.email || acc.name}」领取异常: ${m}`, "warn", 6000);
       }
-      showStatus(`「${acc.email || acc.name}」领取反馈: ${m}`, "warn", 6000);
     } finally {
+      acc.busy = false;
+      renderList();
+    }
+  }
       acc.busy = false;
       renderList();
     }

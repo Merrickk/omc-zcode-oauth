@@ -109,9 +109,27 @@ function angle() { return process.env.HEADLESS === '1' ? true : false; }
  await page.mouse.up();
  await page.waitForTimeout(9000);
  const success = verifyResponses.find(r => r.includes('"VerifyCode":"T001"')) || null;
- const result = { sceneId, prefix, gap, target: want, pzLeft: await page.evaluate(()=>{const p=document.querySelector('#aliyunCaptcha-puzzle');return p?p.style.left:null}), verifyPosts, verifyResponses, success, initResp };
+ let captchaVerifyParam = null;
+ if (success) {
+   try {
+     const sObj = JSON.parse(success);
+     const res = sObj.Result || {};
+     if (res.securityToken && res.certifyId) {
+       captchaVerifyParam = Buffer.from(JSON.stringify({
+         certifyId: res.certifyId,
+         sceneId: sceneId,
+         isSign: true,
+         securityToken: res.securityToken
+       })).toString('base64');
+     }
+   } catch (_) {}
+ }
+ const result = { sceneId, prefix, gap, target: want, pzLeft: await page.evaluate(()=>{const p=document.querySelector('#aliyunCaptcha-puzzle');return p?p.style.left:null}), verifyPosts, verifyResponses, success, initResp, captcha_verify_param: captchaVerifyParam };
  const outFile=process.env.OUT || path.join(here,'.last_solve_result.json');
  fs.writeFileSync(outFile,JSON.stringify(result,null,2));
+ if (captchaVerifyParam) {
+   console.log('CAPTCHA_VERIFY_PARAM=' + captchaVerifyParam);
+ }
  console.log(JSON.stringify({gap, target:want, success:!!success, responses:verifyResponses.map(r=>{try{return JSON.parse(r).Result&&JSON.parse(r).Result.VerifyCode}catch(e){return '?'}}), outFile}));
  await browser.close(); chrome.kill('SIGTERM');
  if (!success) process.exitCode=2;
