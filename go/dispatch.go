@@ -8,7 +8,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
-var pluginVersion = "0.4.6"
+var pluginVersion = "0.4.7"
 
 type rpcAuthStart struct {
 	pluginapi.AuthLoginStartRequest

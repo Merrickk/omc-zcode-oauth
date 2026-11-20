@@ -23,7 +23,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    padding: 24px;
+    padding: 20px;
     max-width: 900px;
     margin: 0 auto;
     line-height: 1.5;
@@ -33,29 +33,29 @@
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
     border-bottom: 1px solid var(--border);
   }
   .title-group {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
   }
-  h1 { font-size: 20px; font-weight: 600; color: #fff; }
+  h1 { font-size: 18px; font-weight: 600; color: #fff; }
   .badge {
     background: rgba(56, 139, 253, 0.15);
     color: #58a6ff;
     border: 1px solid rgba(56, 139, 253, 0.4);
     padding: 2px 8px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 11px;
   }
   .actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
   button {
     font-size: 13px;
@@ -79,24 +79,41 @@
     color: #fff;
   }
   button.primary:hover:not(:disabled) { background: var(--primary-hover); }
-  button.blue {
-    background: var(--blue);
-    border-color: rgba(240, 246, 252, 0.1);
-    color: #fff;
-  }
-  button.blue:hover:not(:disabled) { background: var(--blue-hover); }
 
   #status-bar {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 13px;
     display: none;
+    word-break: break-all;
   }
   #status-bar.info { display: block; background: rgba(56, 139, 253, 0.15); color: #58a6ff; border: 1px solid rgba(56, 139, 253, 0.3); }
   #status-bar.ok { display: block; background: rgba(46, 160, 67, 0.15); color: #3fb950; border: 1px solid rgba(46, 160, 67, 0.3); }
   #status-bar.err { display: block; background: rgba(218, 54, 51, 0.15); color: #f85149; border: 1px solid rgba(218, 54, 51, 0.3); }
   #status-bar.warn { display: block; background: rgba(210, 153, 34, 0.15); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.3); }
+
+  #key-setup {
+    background: #1c2128;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  #key-setup input {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    flex: 1;
+    min-width: 200px;
+  }
 
   .account-list {
     display: flex;
@@ -107,7 +124,7 @@
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 14px 16px;
+    padding: 12px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -120,7 +137,7 @@
     min-width: 0;
   }
   .account-email {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: #fff;
     overflow: hidden;
@@ -163,21 +180,20 @@
   .claimed-tag {
     font-size: 12px;
     color: #3fb950;
-    padding: 4px 8px;
+    padding: 3px 8px;
     background: rgba(46, 160, 67, 0.15);
     border-radius: 4px;
     border: 1px solid rgba(46, 160, 67, 0.3);
   }
   .empty-state {
     text-align: center;
-    padding: 40px;
+    padding: 36px;
     color: var(--text-muted);
     font-size: 14px;
     background: var(--card-bg);
     border: 1px dashed var(--border);
     border-radius: 8px;
   }
-  #cap-holder { position: fixed; top: -9999px; left: -9999px; }
 </style>
 </head>
 <body>
@@ -195,20 +211,22 @@
   </div>
 </header>
 
+<div id="key-setup">
+  <span>管理密码 / Key:</span>
+  <input type="password" id="custom-key" placeholder="输入 CLIProxyAPI 管理密钥">
+  <button id="btn-save-key">保存</button>
+</div>
+
 <div id="status-bar"></div>
 
 <main id="account-container" class="account-list">
   <div class="empty-state">正在加载账号并检查活动资格…</div>
 </main>
 
-<div id="cap-holder"></div>
-<button id="cap-btn" style="display:none"></button>
-
 <script>
 (function() {
   "use strict";
   const CLAIM_API = "/v0/management/plugins/omc-zcode-oauth/claim";
-  const SDK_URL = "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js";
   const DEFAULT_CAMPAIGN_PLAN = {
     plan_id: "zcode-v3-start-plan-wk-1120",
     name: "ZCODE WEEKEND BUILD",
@@ -217,14 +235,49 @@
 
   const CPAMC_AUTH_KEY = "cli-proxy-auth";
   const CPAMC_PREFIX = "enc::v2::";
+  const CPAMC_SALT = "cli-proxy-api-webui::secure-storage";
+
+  let baseURL = location.origin;
   let managementKey = "";
+
+  function isAsciiPrintable(str) {
+    return typeof str === "string" && str.length > 0 && /^[\x20-\x7E]+$/.test(str);
+  }
+
+  // 1. Try URL parameter ?key=...
   try {
-    const raw = localStorage.getItem(CPAMC_AUTH_KEY);
-    if (raw) managementKey = raw.startsWith(CPAMC_PREFIX) ? atob(raw.slice(CPAMC_PREFIX.length)) : raw;
+    const params = new URLSearchParams(location.search);
+    const k = params.get("key");
+    if (k && isAsciiPrintable(k)) managementKey = k.trim();
   } catch(_) {}
 
-  let accounts = []; // list of { name, label, email, plans, busy, result }
-  let captchaCfg = null;
+  // 2. Try localStorage manual key
+  if (!managementKey) {
+    try {
+      const saved = localStorage.getItem("omcZcodeClaimKey");
+      if (saved && isAsciiPrintable(saved)) managementKey = saved.trim();
+    } catch(_) {}
+  }
+
+  // 3. Try Oh My CPA WebUI encoded credential
+  if (!managementKey) {
+    try {
+      const raw = localStorage.getItem(CPAMC_AUTH_KEY);
+      if (raw && raw.startsWith(CPAMC_PREFIX)) {
+        const binary = atob(raw.slice(CPAMC_PREFIX.length));
+        const key = new TextEncoder().encode(CPAMC_SALT + "|" + location.host);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i) ^ key[i % key.length];
+        }
+        const doc = JSON.parse(new TextDecoder().decode(bytes));
+        const mk = doc && doc.state && doc.state.managementKey;
+        if (isAsciiPrintable(mk)) managementKey = mk.trim();
+      }
+    } catch(_) {}
+  }
+
+  let accounts = [];
 
   function showStatus(text, type = "info", autoHide = 0) {
     const bar = document.getElementById("status-bar");
@@ -235,8 +288,10 @@
 
   async function apiCall(method, path, body) {
     const headers = { "Content-Type": "application/json" };
-    if (managementKey) headers["Authorization"] = "Bearer " + managementKey;
-    const resp = await fetch(path, {
+    if (managementKey && isAsciiPrintable(managementKey)) {
+      headers["Authorization"] = "Bearer " + managementKey;
+    }
+    const resp = await fetch(baseURL + path, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined
@@ -245,6 +300,9 @@
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch(_) {}
     if (!resp.ok) {
+      if (resp.status === 401 || resp.status === 403) {
+        document.getElementById("key-setup").style.display = "flex";
+      }
       const err = (data && (data.error || data.message)) || text.slice(0, 200);
       throw new Error(`HTTP ${resp.status}: ${err}`);
     }
@@ -254,7 +312,7 @@
   function renderList() {
     const container = document.getElementById("account-container");
     if (!accounts.length) {
-      container.innerHTML = '<div class="empty-state">未发现 ZCode 账号凭据文件，请先登录或导入账号。</div>';
+      container.innerHTML = '<div class="empty-state">未检索到 ZCode 账号凭据，请先在管理面板完成登录或导入。</div>';
       return;
     }
     container.innerHTML = "";
@@ -262,7 +320,7 @@
       const row = document.createElement("div");
       row.className = "account-row";
 
-      // 1. Account info
+      // 1. Account Info
       const info = document.createElement("div");
       info.className = "account-info";
       const email = document.createElement("div");
@@ -274,7 +332,7 @@
       email.appendChild(file);
       info.appendChild(email);
 
-      // 2. Plan info
+      // 2. Plan Info
       const pinfo = document.createElement("div");
       pinfo.className = "plan-info";
       const pname = document.createElement("div");
@@ -318,11 +376,10 @@
     }
   }
 
-  // Load and refresh all accounts
   async function loadAndRefreshAll() {
     const btn = document.getElementById("btn-refresh-all");
     btn.disabled = true;
-    showStatus("正在拉取账号列表并刷新各账号活动资格…", "info");
+    showStatus("正在加载账号并刷新活动资格…", "info");
     try {
       const doc = await apiCall("GET", "/v0/management/auth-files");
       const files = (doc && Array.isArray(doc.files)) ? doc.files : [];
@@ -343,11 +400,10 @@
       renderList();
 
       if (!accounts.length) {
-        showStatus("未检索到任何 ZCode 账号", "warn");
+        showStatus("未检索到任何 ZCode 账号凭据", "warn");
         return;
       }
 
-      // Concurrently/sequentially activate & preview each account
       let okCount = 0;
       for (const acc of accounts) {
         try {
@@ -359,7 +415,7 @@
         } catch(_) {}
         renderList();
       }
-      showStatus(`活动资格刷新完成！共 ${accounts.length} 个账号，${okCount} 个检索到常规套餐，其余可随时点击领取参与大促。`, "ok", 5000);
+      showStatus(`资格刷新完成！共 ${accounts.length} 个账号，${okCount} 个检索到常规套餐，其余可直接点击领取。`, "ok", 5000);
     } catch(e) {
       showStatus("刷新失败: " + e.message, "err");
     } finally {
@@ -367,7 +423,6 @@
     }
   }
 
-  // Single account claim
   async function claimAccount(acc) {
     acc.busy = true;
     renderList();
@@ -375,7 +430,6 @@
     const targetPlan = (acc.plans && acc.plans.length) ? acc.plans[0].plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
 
     try {
-      // Direct call auto-claim endpoint which handles verification & claim seamlessly
       const res = await apiCall("POST", `${CLAIM_API}/auto`, {
         auth: acc.name,
         plan_id: targetPlan,
@@ -403,8 +457,16 @@
   }
 
   document.getElementById("btn-refresh-all").addEventListener("click", loadAndRefreshAll);
+  document.getElementById("btn-save-key").addEventListener("click", () => {
+    const k = (document.getElementById("custom-key").value || "").trim();
+    if (k && isAsciiPrintable(k)) {
+      managementKey = k;
+      localStorage.setItem("omcZcodeClaimKey", k);
+      document.getElementById("key-setup").style.display = "none";
+      loadAndRefreshAll();
+    }
+  });
 
-  // Auto trigger on initial page open
   window.addEventListener("DOMContentLoaded", () => {
     loadAndRefreshAll();
   });
