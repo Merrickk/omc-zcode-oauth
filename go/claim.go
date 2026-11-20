@@ -134,8 +134,16 @@ func billingHeaders(token string) http.Header {
 	if token != "" {
 		h.Set("Authorization", "Bearer "+token)
 	}
+	// zcode-switch pins X-Device-Mid to a per-account stable virtual MID on
+	// billing requests. apiCall adds c.Device only when explicitly passed; set
+	// it here through a package-level override used by preview/claim.
+	if currentBillingDevice != "" {
+		h.Set("X-Device-Mid", currentBillingDevice)
+	}
 	return h
 }
+
+var currentBillingDevice string
 
 func osCategory() string {
 	switch runtime.GOOS {
@@ -164,6 +172,8 @@ func previewPlans(sender httpSender, c credential) ([]claimPlan, error) {
 		"app_version": {getConfig().AppVersion},
 		"platform":    {zcodePlatform()},
 	}.Encode()
+	currentBillingDevice = c.Device
+	defer func() { currentBillingDevice = "" }()
 	data, body, err := apiCallEnvelope(sender, "GET", target, "Bearer "+c.JWT, c.Device, billingHeaders(c.JWT), nil)
 	if err != nil {
 		return nil, err
@@ -416,6 +426,8 @@ func submitClaim(sender httpSender, c credential, planID, captchaParam, captchaR
 	if strings.TrimSpace(captchaParam) == "" {
 		return out, errors.New("captcha verification parameter is required")
 	}
+	currentBillingDevice = c.Device
+	defer func() { currentBillingDevice = "" }()
 	headers := billingHeaders(c.JWT)
 	headers.Set("X-Aliyun-Captcha-Verify-Param", strings.TrimSpace(captchaParam))
 	if strings.TrimSpace(captchaRegion) != "" {
