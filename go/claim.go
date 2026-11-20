@@ -128,6 +128,7 @@ func billingHeaders(token string) http.Header {
 		"X-Os-Version":        {osRelease()},
 	}
 	if requestID != "" {
+		h.Set("x-request-id", requestID)
 		h.Set("X-Request-Id", requestID)
 	}
 	if token != "" {
@@ -457,7 +458,10 @@ func reportActivationEvents(sender httpSender, c credential) error {
 	if c.JWT == "" {
 		return errors.New("ZCode sign-in required")
 	}
-	uid := c.UID
+	uid := strings.TrimSpace(c.UID)
+	if uid == "" {
+		uid = jwtUserID(c.JWT)
+	}
 	if uid == "" {
 		return errors.New("account has no user identity")
 	}
@@ -468,10 +472,6 @@ func reportActivationEvents(sender httpSender, c credential) error {
 		if err != nil {
 			return err
 		}
-	}
-	traceID, err := randomUUID()
-	if err != nil {
-		return err
 	}
 	for _, element := range []string{"app_launch", "app_daily_active"} {
 		eventID, err := randomUUID()
@@ -495,7 +495,6 @@ func reportActivationEvents(sender httpSender, c credential) error {
 			"device_mid":         device,
 			"mac_id":             "",
 			"marketing_params":   "{}",
-			"trace_id":           traceID,
 		}
 		if _, err := apiCall(sender, "POST", eventReportURL, "", device, billingHeaders(""), body); err != nil {
 			return err

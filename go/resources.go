@@ -249,12 +249,17 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 		if err != nil {
 			return managementError(http.StatusBadRequest, err), true
 		}
+		c, err = credentialWithVirtualDevice(dir, name, c)
+		if err != nil {
+			return managementError(http.StatusBadRequest, err), true
+		}
 		unlock := claimLock(name)
 		defer unlock()
 		if err := reportActivationEvents(claimSender(), c); err != nil {
 			return managementError(0, err), true
 		}
-		return managementJSON(http.StatusOK, map[string]any{"activated": true}), true
+		plans, _ := previewPlans(claimSender(), c)
+		return managementJSON(http.StatusOK, map[string]any{"activated": true, "plans": plans}), true
 
 	case sub == "/auto" && req.Method == http.MethodPost:
 		body, err := decodeAutoClaimBody(req.Body)

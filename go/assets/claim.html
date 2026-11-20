@@ -49,10 +49,10 @@
 </div>
 
 <div class="row">
-  <button id="btn-plans" class="primary">查询可领取的套餐</button>
+  <button id="btn-activate" class="primary">刷新活动资格（上报活跃并查询）</button>
+  <button id="btn-plans">查询套餐</button>
   <button id="btn-auto">自动领取（内建验证码）</button>
-  <button id="btn-activate">手动上报活跃事件</button>
-  <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 领取前自动上报</label>
+  <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 自动上报活跃</label>
 </div>
 <div class="row" style="border-top:1px solid #d0d7de;padding-top:10px;margin-top:12px;">
   <label class="hint"><input type="checkbox" id="auto-claim" style="min-width:0;flex:none"> <b>自动领取循环</b>（每 10 分钟查一次，发现套餐自动领取）</label>
@@ -377,39 +377,62 @@
   function renderPlans(plans) {
     const box = $("plans");
     box.className = "";
-    if (!plans || !plans.length) {
-      box.textContent = "当前没有可领取的套餐（可能已领取或不在活动期）。";
+    box.innerHTML = "";
+    if (plans && plans.length) {
+      for (const plan of plans) {
+        const card = document.createElement("div");
+        card.className = "plan";
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = plan.name || plan.plan_id;
+        const grants = document.createElement("div");
+        grants.className = "grants";
+        const list = (plan.grants && plan.grants.length)
+          ? plan.grants
+          : (plan.grant_items || []).map((g) => g.name || g.item || g.title || JSON.stringify(g));
+        grants.textContent = list.join("、") || plan.description || "";
+        const button = document.createElement("button");
+        button.className = "primary";
+        button.id = "cap-btn-" + plan.plan_id;
+        button.textContent = "领取";
+        button.addEventListener("click", () => {
+          $("btn-plans").disabled = true;
+          runCaptcha(plan).catch((e) => {
+            status("❌ " + e.message, "err");
+            $("btn-plans").disabled = false;
+          });
+        });
+        card.appendChild(name);
+        card.appendChild(grants);
+        card.appendChild(button);
+        box.appendChild(card);
+      }
       return;
     }
-    box.innerHTML = "";
-    for (const plan of plans) {
-      const card = document.createElement("div");
-      card.className = "plan";
-      const name = document.createElement("div");
-      name.className = "name";
-      name.textContent = plan.name || plan.plan_id;
-      const grants = document.createElement("div");
-      grants.className = "grants";
-      const list = (plan.grants && plan.grants.length)
-        ? plan.grants
-        : (plan.grant_items || []).map((g) => g.name || g.item || g.title || JSON.stringify(g));
-      grants.textContent = list.join("、") || plan.description || "";
-      const button = document.createElement("button");
-      button.className = "primary";
-      button.id = "cap-btn-" + plan.plan_id;
-      button.textContent = "领取";
-      button.addEventListener("click", () => {
-        $("btn-plans").disabled = true;
-        runCaptcha(plan).catch((e) => {
-          status("❌ " + e.message, "err");
-          $("btn-plans").disabled = false;
-        });
+
+    // When preview returns empty, render hint and direct claim fallback
+    const emptyHint = document.createElement("div");
+    emptyHint.className = "hint";
+    emptyHint.style.marginBottom = "10px";
+    emptyHint.textContent = "当前官方活动接口未返回常规可领套餐（可能已领取、不在普通展示期或受网络出口影响）。";
+    box.appendChild(emptyHint);
+
+    const manualRow = document.createElement("div");
+    manualRow.className = "row";
+    manualRow.style.marginTop = "8px";
+    manualRow.innerHTML = `
+      <input type="text" id="manual-plan-id" placeholder="输入活动 Plan ID (如 zcode-v3-start-plan-wk-1120)" value="zcode-v3-start-plan-wk-1120" style="flex:1;">
+      <button id="btn-manual-claim" class="primary">强制领取该套餐</button>
+    `;
+    box.appendChild(manualRow);
+
+    $("btn-manual-claim").addEventListener("click", () => {
+      const pid = ($("manual-plan-id").value || "").trim();
+      if (!pid) { status("请填写 Plan ID", "err"); return; }
+      runCaptcha({ plan_id: pid, name: pid }).catch((e) => {
+        status("❌ " + e.message, "err");
       });
-      card.appendChild(name);
-      card.appendChild(grants);
-      card.appendChild(button);
-      box.appendChild(card);
-    }
+    });
   }
 
   async function refreshPlans() {
@@ -460,11 +483,21 @@
     if (!name) { status("请先选择或填写凭据文件名", "err"); return; }
     $("btn-activate").disabled = true;
     try {
-      status("正在上报活跃心跳 (app_launch, app_daily_active)...");
-      await call("POST", CLAIM_API + "/activate?auth=" + encodeURIComponent(name));
-      status("活跃事件上报成功！请稍等 1-2 秒后再次点击“查询可领取的套餐”。", "ok");
+      status("正在向官方上报活跃事件 (app_launch + app_daily_active) 并刷新活动资格…");
+      const res = await call("POST", CLAIM_API + "/activate?auth=" + encodeURIComponent(name));
+      if (res && res.plans) {
+        renderPlans(res.plans);
+        if (res.plans.length) {
+          status(`资格刷新成功！检索到 ${res.plans.length} 个可领套餐。`, "ok");
+        } else {
+          status("活跃事件上报成功，但官方 preview 接口返回暂无套餐（可尝试下方直接输入活动 ID 领取）。", "ok");
+        }
+      } else {
+        await refreshPlans();
+        status("活动资格已刷新并完成重新检测。", "ok");
+      }
     } catch (e) {
-      status("上报失败：" + e.message, "err");
+      status("刷新资格失败：" + e.message, "err");
     } finally {
       $("btn-activate").disabled = false;
     }
