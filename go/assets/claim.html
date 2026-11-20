@@ -1,529 +1,412 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZCode 活动领取</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>活动领取 - ZCode</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-         max-width: 720px; margin: 20px auto; padding: 0 16px; color: #1f2328; }
-  h1 { font-size: 17px; margin: 0 0 4px; } h2 { font-size: 14px; margin: 18px 0 6px; color: #57606a; }
-  .row { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
-  input, select { flex: 1; min-width: 180px; padding: 6px 10px; border: 1px solid #d0d7de;
-         border-radius: 6px; font: inherit; background: #fff; color: inherit; }
-  button { padding: 6px 14px; border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa;
-         cursor: pointer; font: inherit; color: inherit; }
-  button.primary { background: #0969da; border-color: #0969da; color: #fff; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  .plan { border: 1px solid #d0d7de; border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
-  .plan .name { font-weight: 600; }
-  .plan .grants { color: #57606a; font-size: 12px; margin-bottom: 6px; }
-  #status { margin-top: 16px; padding: 8px 12px; border-radius: 6px; background: #f6f8fa; white-space: pre-wrap; }
-  #status.err { background: #ffebe9; } #status.ok { background: #dafbe1; }
-  #cap-holder { margin-top: 10px; }
-  .hint { color: #57606a; font-size: 12px; margin: 4px 0 0; }
-  .hidden { display: none !important; }
-  @media (prefers-color-scheme: dark) {
-    body { color: #e6edf3; } input, select, button { background: #21262d; border-color: #30363d; color: #e6edf3; }
-    #status, .plan { background: #161b22; border-color: #30363d; }
-    #status.err { background: #3d1418; } #status.ok { background: #10352a; }
+  :root {
+    --bg: #0d1117;
+    --card-bg: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --primary: #238636;
+    --primary-hover: #2ea043;
+    --blue: #1f6feb;
+    --blue-hover: #388bfd;
+    --danger: #da3633;
+    --warn: #d29922;
   }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  h1 { font-size: 20px; font-weight: 600; color: #fff; }
+  .badge {
+    background: rgba(56, 139, 253, 0.15);
+    color: #58a6ff;
+    border: 1px solid rgba(56, 139, 253, 0.4);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  button {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: #21262d;
+    color: #c9d1d9;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  button:hover:not(:disabled) { background: #30363d; border-color: #8b949e; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  button.primary {
+    background: var(--primary);
+    border-color: rgba(240, 246, 252, 0.1);
+    color: #fff;
+  }
+  button.primary:hover:not(:disabled) { background: var(--primary-hover); }
+  button.blue {
+    background: var(--blue);
+    border-color: rgba(240, 246, 252, 0.1);
+    color: #fff;
+  }
+  button.blue:hover:not(:disabled) { background: var(--blue-hover); }
+
+  #status-bar {
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: none;
+  }
+  #status-bar.info { display: block; background: rgba(56, 139, 253, 0.15); color: #58a6ff; border: 1px solid rgba(56, 139, 253, 0.3); }
+  #status-bar.ok { display: block; background: rgba(46, 160, 67, 0.15); color: #3fb950; border: 1px solid rgba(46, 160, 67, 0.3); }
+  #status-bar.err { display: block; background: rgba(218, 54, 51, 0.15); color: #f85149; border: 1px solid rgba(218, 54, 51, 0.3); }
+  #status-bar.warn { display: block; background: rgba(210, 153, 34, 0.15); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.3); }
+
+  .account-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .account-row {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    transition: border-color 0.15s ease;
+  }
+  .account-row:hover { border-color: #8b949e; }
+  .account-info {
+    flex: 2;
+    min-width: 0;
+  }
+  .account-email {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .account-file {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-weight: normal;
+  }
+  .plan-info {
+    flex: 3;
+    min-width: 0;
+  }
+  .plan-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #58a6ff;
+  }
+  .plan-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .row-actions {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .claimed-tag {
+    font-size: 12px;
+    color: #3fb950;
+    padding: 4px 8px;
+    background: rgba(46, 160, 67, 0.15);
+    border-radius: 4px;
+    border: 1px solid rgba(46, 160, 67, 0.3);
+  }
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 14px;
+    background: var(--card-bg);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+  #cap-holder { position: fixed; top: -9999px; left: -9999px; }
 </style>
 </head>
 <body>
-<h1>ZCode 活动领取</h1>
-<p class="hint" id="conn-hint">正在识别连接方式…</p>
 
-<h2>凭据</h2>
-<div class="row" id="auth-row">
-  <select id="auth-select" class="hidden"></select>
-  <input id="auth" placeholder="凭据文件名，如 zcode-zai-xxxx.json">
-  <button id="btn-reload" title="重新读取凭据列表">刷新</button>
-</div>
+<header>
+  <div class="title-group">
+    <h1>活动领取</h1>
+    <span class="badge" title="后台即使关闭此页面也会每隔 30 分钟自动巡检并领取">后台 30m 自动巡检中</span>
+  </div>
+  <div class="actions">
+    <button id="btn-refresh-all" class="primary">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"/></svg>
+      刷新资格
+    </button>
+  </div>
+</header>
 
-<h2 class="hidden" id="manual-title">手动连接</h2>
-<div class="row hidden" id="manual-row">
-  <input id="base" placeholder="CLIProxyAPI 地址，如 http://127.0.0.1:8317">
-  <input id="key" type="password" placeholder="Management API Key">
-</div>
+<div id="status-bar"></div>
 
-<div class="row">
-  <button id="btn-activate" class="primary">刷新活动资格（上报活跃并查询）</button>
-  <button id="btn-plans">查询套餐</button>
-  <button id="btn-auto">自动领取（内建验证码）</button>
-  <label class="hint"><input type="checkbox" id="activate" checked style="min-width:0;flex:none"> 自动上报活跃</label>
-</div>
-<div class="row" style="border-top:1px solid #d0d7de;padding-top:10px;margin-top:12px;">
-  <label class="hint"><input type="checkbox" id="auto-claim" style="min-width:0;flex:none"> <b>自动领取循环</b>（每 10 分钟查一次，发现套餐自动领取）</label>
-  <span id="auto-status" class="hint" style="margin-left:auto;"></span>
-</div>
+<main id="account-container" class="account-list">
+  <div class="empty-state">正在加载账号并检查活动资格…</div>
+</main>
 
-<h2>套餐</h2>
-<div id="plans" class="hint">尚未查询。</div>
 <div id="cap-holder"></div>
-
-<div id="status"></div>
+<button id="cap-btn" style="display:none"></button>
 
 <script>
-(function () {
+(function() {
   "use strict";
-  const SDK_URL = "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js";
   const CLAIM_API = "/v0/management/plugins/omc-zcode-oauth/claim";
-  const TRACELESS_TIMEOUT = 8000;
+  const SDK_URL = "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js";
+  const DEFAULT_CAMPAIGN_PLAN = {
+    plan_id: "zcode-v3-start-plan-wk-1120",
+    name: "ZCODE WEEKEND BUILD",
+    description: "GLM-5.3-Flash · 5 亿 Token"
+  };
+
   const CPAMC_AUTH_KEY = "cli-proxy-auth";
   const CPAMC_PREFIX = "enc::v2::";
-  const CPAMC_SALT = "cli-proxy-api-webui::secure-storage";
-
-  const $ = (id) => document.getElementById(id);
-  let baseURL = location.origin;
   let managementKey = "";
+  try {
+    const raw = localStorage.getItem(CPAMC_AUTH_KEY);
+    if (raw) managementKey = raw.startsWith(CPAMC_PREFIX) ? atob(raw.slice(CPAMC_PREFIX.length)) : raw;
+  } catch(_) {}
+
+  let accounts = []; // list of { name, label, email, plans, busy, result }
   let captchaCfg = null;
-  let pendingClaim = null;
-  let submitted = false;
-  let tracelessTimer = 0;
 
-  function status(text, tone) {
-    const el = $("status");
-    el.textContent = text || "";
-    el.className = tone || "";
-  }
-  function hint(text) { $("conn-hint").textContent = text; }
-
-  // The panel mirrors its gateway credential into CPAMC's own storage entry so a
-  // plugin page opens already signed in. Reading it keeps this page zero-config
-  // inside Oh My CPA while still working standalone against a raw CPA instance.
-  function readPanelCredential() {
-    try {
-      const raw = localStorage.getItem(CPAMC_AUTH_KEY);
-      if (!raw || !raw.startsWith(CPAMC_PREFIX)) return null;
-      const binary = atob(raw.slice(CPAMC_PREFIX.length));
-      const key = new TextEncoder().encode(CPAMC_SALT + "|" + location.host);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i += 1) {
-        bytes[i] = binary.charCodeAt(i) ^ key[i % key.length];
-      }
-      const doc = JSON.parse(new TextDecoder().decode(bytes));
-      const state = doc && doc.state ? doc.state : {};
-      return {
-        apiBase: typeof state.apiBase === "string" ? state.apiBase : "",
-        managementKey: typeof state.managementKey === "string" ? state.managementKey : "",
-      };
-    } catch (_) {
-      return null;
-    }
+  function showStatus(text, type = "info", autoHide = 0) {
+    const bar = document.getElementById("status-bar");
+    bar.textContent = text;
+    bar.className = type;
+    if (autoHide > 0) setTimeout(() => { if (bar.textContent === text) bar.style.display = "none"; }, autoHide);
   }
 
-  function resolveConnection() {
-    const panel = readPanelCredential();
-    if (panel && (panel.apiBase || panel.managementKey)) {
-      baseURL = (panel.apiBase || location.origin).replace(/\/+$/, "");
-      managementKey = panel.managementKey;
-      $("manual-row").classList.add("hidden");
-      $("manual-title").classList.add("hidden");
-      hint("已通过面板凭据自动连接（" + baseURL + "），无需填写 Key。");
-      return true;
-    }
-    const savedBase = localStorage.getItem("omcZcodeClaimBase") || "";
-    const savedKey = localStorage.getItem("omcZcodeClaimKey") || "";
-    $("base").value = savedBase || location.origin;
-    $("key").value = savedKey;
-    $("manual-row").classList.remove("hidden");
-    $("manual-title").classList.remove("hidden");
-    baseURL = ($("base").value || location.origin).replace(/\/+$/, "");
-    managementKey = $("key").value.trim();
-    hint("未检测到面板凭据：可手动填写 CLIProxyAPI 地址与 Management Key，或直接在面板的插件页中打开本页。");
-    return Boolean(baseURL);
-  }
-
-  function headers() {
-    const h = { "Content-Type": "application/json" };
-    if (managementKey) h["Authorization"] = "Bearer " + managementKey;
-    return h;
-  }
-
-  async function call(method, path, body) {
-    if ($("base").value) baseURL = $("base").value.trim().replace(/\/+$/, "");
-    if ($("key").value) managementKey = $("key").value.trim();
-    const resp = await fetch(baseURL + path, {
+  async function apiCall(method, path, body) {
+    const headers = { "Content-Type": "application/json" };
+    if (managementKey) headers["Authorization"] = "Bearer " + managementKey;
+    const resp = await fetch(path, {
       method,
-      headers: headers(),
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers,
+      body: body ? JSON.stringify(body) : undefined
     });
-    // Read the body once: a failure can be the plugin's JSON, the host's plain
-    // text ("plugin management handler failed"), or a proxy's HTML page, and the
-    // operator needs to see which.
     const text = await resp.text();
-    let out = null;
-    try { out = text ? JSON.parse(text) : null; } catch (_) {}
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch(_) {}
     if (!resp.ok) {
-      const detail = (out && (out.error || out.message)) || text.trim().slice(0, 300);
-      const err = new Error("HTTP " + resp.status + (detail ? " — " + detail : ""));
-      err.outcome = out && out.outcome;
-      throw err;
+      const err = (data && (data.error || data.message)) || text.slice(0, 200);
+      throw new Error(`HTTP ${resp.status}: ${err}`);
     }
-    return out;
+    return data;
   }
 
-  function selectedAuth() {
-    const sel = $("auth-select");
-    if (!sel.classList.contains("hidden") && sel.value) return sel.value;
-    return $("auth").value.trim();
-  }
-
-  async function loadAuthFiles() {
-    const sel = $("auth-select");
-    try {
-      const doc = await call("GET", "/v0/management/auth-files");
-      const files = Array.isArray(doc && doc.files) ? doc.files : [];
-      const zcode = files.filter((f) => {
-        const provider = String(f.provider || "").toLowerCase();
-        const name = String(f.name || "").toLowerCase();
-        return provider.includes("zcode") || name.includes("zcode");
-      });
-      if (!zcode.length) {
-        sel.classList.add("hidden");
-        return;
-      }
-      sel.innerHTML = "";
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = "选择凭据（" + zcode.length + " 个）";
-      sel.appendChild(placeholder);
-      for (const file of zcode) {
-        const option = document.createElement("option");
-        option.value = String(file.name || "");
-        // Show the account identity the operator recognizes, not the internal
-        // file name. The file name stays as the value because the API needs it.
-        const account = String(file.label || file.email || file.account || "").trim();
-        const shortFile = String(file.name || "").replace(/\.json$/i, "");
-        option.textContent = (account || shortFile) + (file.disabled ? "（已停用）" : "");
-        sel.appendChild(option);
-      }
-      sel.classList.remove("hidden");
-      const remembered = localStorage.getItem("omcZcodeClaimAuth") || "";
-      if (remembered) {
-        const match = zcode.find((f) => f.name === remembered);
-        if (match) sel.value = remembered;
-      }
-      if (sel.value) $("auth").value = sel.value;
-    } catch (_) {
-      sel.classList.add("hidden");
-    }
-  }
-
-  function loadSdk() {
-    if (typeof window.initAliyunCaptcha === "function") return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = SDK_URL;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("阿里云验证码组件加载失败（可能被网络或浏览器扩展拦截）"));
-      document.head.appendChild(script);
-    });
-  }
-
-  // runCaptcha resolves once the claim finished, failed, or needs a human.
-  // In auto mode a failed traceless check pauses the loop instead of blocking
-  // forever on a slider the background cannot solve.
-  function runCaptcha(plan, auto) {
-    return new Promise((resolve) => {
-      const authName = selectedAuth();
-      if (!authName) { status("请先选择或填写凭据", "err"); resolve({ ok: false }); return; }
-      localStorage.setItem("omcZcodeClaimAuth", authName);
-
-      (async () => {
-        status(auto ? "[自动] 正在准备验证…" : "正在准备验证…");
-        if (!captchaCfg) captchaCfg = await call("GET", CLAIM_API + "/captcha-config");
-        if (!captchaCfg || !captchaCfg.enabled || !captchaCfg.scene_id) {
-          throw new Error("服务端未开启验证码或缺少场景配置，暂时无法领取");
-        }
-        await loadSdk();
-        window.AliyunCaptchaConfig = { region: captchaCfg.region, prefix: captchaCfg.prefix };
-        pendingClaim = plan;
-        submitted = false;
-
-        const finish = (param) => {
-          if (submitted) return;
-          submitted = true;
-          clearTimeout(tracelessTimer);
-          const token = typeof param === "string" ? param : (param && param.captchaVerifyParam);
-          if (!token || !String(token).trim()) {
-            status("验证回调没有返回 token，请重试。", "err");
-            resolve({ ok: false });
-            return;
-          }
-          submitClaim(plan, String(token).trim(), auto).then(resolve);
-        };
-        const interactive = (why) => {
-          clearTimeout(tracelessTimer);
-          if (auto) {
-            // A human gesture is required; the background loop cannot supply it.
-            status("[自动] 静默验证未通过，需要人工滑块验证。自动循环已暂停，请手动点“领取”。", "err");
-            stopAuto("需要人工验证，已暂停");
-            renderPlans([plan]);  // re-show the plan so the user can click it
-            resolve({ ok: false, interactive: true });
-          } else {
-            status("静默验证未通过，请在弹出的滑块中完成验证。" + (why ? "（" + String(why).slice(0, 120) + "）" : ""));
-          }
-        };
-
-        window.initAliyunCaptcha({
-          SceneId: captchaCfg.scene_id,
-          mode: "popup",
-          language: (navigator.language || "zh-CN").toLowerCase().startsWith("en") ? "en" : "zh-CN",
-          showErrorTip: false,
-          element: "#cap-holder",
-          button: "#cap-btn-" + plan.plan_id,
-          getInstance: (instance) => {
-            if (typeof instance.startTracelessVerification === "function") {
-              status(auto ? "[自动] 正在静默验证…" : "正在尝试静默验证…");
-              instance.startTracelessVerification();
-              tracelessTimer = setTimeout(() => interactive("timeout"), TRACELESS_TIMEOUT);
-            } else {
-              interactive();
-            }
-          },
-          success: finish,
-          fail: interactive,
-          onError: interactive,
-        });
-      })().catch((e) => {
-        status("❌ " + e.message, "err");
-        resolve({ ok: false });
-      });
-    });
-  }
-
-  async function submitClaim(plan, token, auto) {
-    const name = selectedAuth();
-    const prefix = auto ? "[自动] " : "";
-    try {
-      if ($("activate").checked) {
-        status(prefix + "上报活跃事件…");
-        await call("POST", CLAIM_API + "/activate?auth=" + encodeURIComponent(name));
-      }
-      status(prefix + "提交领取…");
-      const out = await call("POST", CLAIM_API + "/claim", {
-        auth: name,
-        plan_id: plan.plan_id,
-        captcha_param: token,
-        captcha_region: (captchaCfg && captchaCfg.region) || "",
-      });
-      const when = out.next_claim_at ? "\n下次可领取时间：" + new Date(out.next_claim_at * 1000).toLocaleString() : "";
-      status("✅ " + prefix + "领取成功：" + (out.plan_name || plan.name || plan.plan_id) + when, "ok");
-      await refreshPlans();
-      return { ok: true };
-    } catch (e) {
-      let text = "❌ " + prefix + "领取失败：" + e.message;
-      if (e.outcome && e.outcome.next_claim_at) {
-        text += "\n冷却中，下次可领取时间：" + new Date(e.outcome.next_claim_at * 1000).toLocaleString();
-      }
-      status(text, "err");
-      return { ok: false };
-    } finally {
-      $("btn-plans").disabled = false;
-    }
-  }
-
-  // ---- Background auto-claim loop -------------------------------------------
-  // The captcha token must be produced by the browser widget, so this loop only
-  // runs while this page is open. It polls every AUTO_INTERVAL_MS; when a plan
-  // appears it runs the same traceless-first flow. If a slider is required the
-  // loop pauses and asks for a human, since it cannot solve the puzzle itself.
-  const AUTO_INTERVAL_MS = 10 * 60 * 1000;
-  let autoTimer = 0;
-  let autoBusy = false;
-
-  function autoStatus(text) { $("auto-status").textContent = text || ""; }
-
-  function stopAuto(reason) {
-    clearTimeout(autoTimer);
-    autoTimer = 0;
-    $("auto-claim").checked = false;
-    localStorage.removeItem("omcZcodeClaimAuto");
-    autoStatus(reason || "已停止");
-  }
-
-  async function autoCycle() {
-    if (!$("auto-claim").checked || autoBusy) return;
-    autoBusy = true;
-    try {
-      const name = selectedAuth();
-      if (!name) { autoStatus("未选择凭据"); return; }
-      const out = await call("GET", CLAIM_API + "/plans?auth=" + encodeURIComponent(name));
-      const plans = out && out.plans ? out.plans : [];
-      if (!plans.length) {
-        autoStatus("无套餐，" + new Date().toLocaleTimeString() + " 检查");
-        return;
-      }
-      // Claim the highest-priority plan, one per cycle, to stay idempotent.
-      const plan = plans.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
-      renderPlans(plans);
-      autoStatus("发现套餐，尝试领取…");
-      const result = await runCaptcha(plan, true);
-      if (result && result.ok) autoStatus("领取成功，" + new Date().toLocaleTimeString());
-      else if (!result || !result.interactive) autoStatus("本次未领取，" + new Date().toLocaleTimeString());
-    } catch (e) {
-      autoStatus("检查失败：" + e.message.slice(0, 60));
-    } finally {
-      autoBusy = false;
-      if ($("auto-claim").checked) {
-        autoTimer = setTimeout(autoCycle, AUTO_INTERVAL_MS);
-      }
-    }
-  }
-
-  function renderPlans(plans) {
-    const box = $("plans");
-    box.className = "";
-    box.innerHTML = "";
-    if (plans && plans.length) {
-      for (const plan of plans) {
-        const card = document.createElement("div");
-        card.className = "plan";
-        const name = document.createElement("div");
-        name.className = "name";
-        name.textContent = plan.name || plan.plan_id;
-        const grants = document.createElement("div");
-        grants.className = "grants";
-        const list = (plan.grants && plan.grants.length)
-          ? plan.grants
-          : (plan.grant_items || []).map((g) => g.name || g.item || g.title || JSON.stringify(g));
-        grants.textContent = list.join("、") || plan.description || "";
-        const button = document.createElement("button");
-        button.className = "primary";
-        button.id = "cap-btn-" + plan.plan_id;
-        button.textContent = "领取";
-        button.addEventListener("click", () => {
-          $("btn-plans").disabled = true;
-          runCaptcha(plan).catch((e) => {
-            status("❌ " + e.message, "err");
-            $("btn-plans").disabled = false;
-          });
-        });
-        card.appendChild(name);
-        card.appendChild(grants);
-        card.appendChild(button);
-        box.appendChild(card);
-      }
+  function renderList() {
+    const container = document.getElementById("account-container");
+    if (!accounts.length) {
+      container.innerHTML = '<div class="empty-state">未发现 ZCode 账号凭据文件，请先登录或导入账号。</div>';
       return;
     }
+    container.innerHTML = "";
+    for (const acc of accounts) {
+      const row = document.createElement("div");
+      row.className = "account-row";
 
-    // When preview returns empty, render hint and direct claim fallback
-    const emptyHint = document.createElement("div");
-    emptyHint.className = "hint";
-    emptyHint.style.marginBottom = "10px";
-    emptyHint.textContent = "当前官方活动接口未返回常规可领套餐（可能已领取、不在普通展示期或受网络出口影响）。";
-    box.appendChild(emptyHint);
+      // 1. Account info
+      const info = document.createElement("div");
+      info.className = "account-info";
+      const email = document.createElement("div");
+      email.className = "account-email";
+      email.textContent = acc.email || acc.label || acc.name.replace(/\.json$/, "");
+      const file = document.createElement("span");
+      file.className = "account-file";
+      file.textContent = acc.name;
+      email.appendChild(file);
+      info.appendChild(email);
 
-    const manualRow = document.createElement("div");
-    manualRow.className = "row";
-    manualRow.style.marginTop = "8px";
-    manualRow.innerHTML = `
-      <input type="text" id="manual-plan-id" placeholder="输入活动 Plan ID (如 zcode-v3-start-plan-wk-1120)" value="zcode-v3-start-plan-wk-1120" style="flex:1;">
-      <button id="btn-manual-claim" class="primary">强制领取该套餐</button>
-    `;
-    box.appendChild(manualRow);
+      // 2. Plan info
+      const pinfo = document.createElement("div");
+      pinfo.className = "plan-info";
+      const pname = document.createElement("div");
+      pname.className = "plan-name";
+      const pdesc = document.createElement("div");
+      pdesc.className = "plan-desc";
 
-    $("btn-manual-claim").addEventListener("click", () => {
-      const pid = ($("manual-plan-id").value || "").trim();
-      if (!pid) { status("请填写 Plan ID", "err"); return; }
-      runCaptcha({ plan_id: pid, name: pid }).catch((e) => {
-        status("❌ " + e.message, "err");
-      });
-    });
-  }
-
-  async function refreshPlans() {
-    const name = selectedAuth();
-    if (!name) throw new Error("请先选择或填写凭据文件名");
-    localStorage.setItem("omcZcodeClaimAuth", name);
-    captchaCfg = null;
-    const out = await call("GET", CLAIM_API + "/plans?auth=" + encodeURIComponent(name));
-    renderPlans(out.plans);
-  }
-
-  $("btn-auto").addEventListener("click", async () => {
-    const name = selectedAuth();
-    if (!name) { status("请先选择或填写凭据文件名", "err"); return; }
-    $("btn-auto").disabled = true;
-    try {
-      status("正在调用插件内建验证码求解并完成领取…");
-      const out = await call("POST", CLAIM_API + "/auto", {
-        auth: name,
-        plan_id: "",
-        captcha_region: (captchaCfg && captchaCfg.region) || "cn",
-        activate: $("activate").checked,
-      });
-      status("自动领取结果：solved=" + out.solved + " claimed=" + out.claimed + (out.message ? " msg=" + out.message : ""), out.claimed ? "ok" : "err");
-      await refreshPlans();
-    } catch (e) {
-      status("❌ 自动领取失败：" + e.message, "err");
-    } finally {
-      $("btn-auto").disabled = false;
-    }
-  });
-
-  $("btn-plans").addEventListener("click", async () => {
-    $("btn-plans").disabled = true;
-    try {
-      status("查询套餐…");
-      await refreshPlans();
-      status("查询完成。点击套餐旁的“领取”开始（会自动尝试静默验证）。", "ok");
-    } catch (e) {
-      status("❌ " + e.message, "err");
-    } finally {
-      $("btn-plans").disabled = false;
-    }
-  });
-
-  $("btn-activate").addEventListener("click", async () => {
-    const name = selectedAuth();
-    if (!name) { status("请先选择或填写凭据文件名", "err"); return; }
-    $("btn-activate").disabled = true;
-    try {
-      status("正在向官方上报活跃事件 (app_launch + app_daily_active) 并刷新活动资格…");
-      const res = await call("POST", CLAIM_API + "/activate?auth=" + encodeURIComponent(name));
-      if (res && res.plans) {
-        renderPlans(res.plans);
-        if (res.plans.length) {
-          status(`资格刷新成功！检索到 ${res.plans.length} 个可领套餐。`, "ok");
-        } else {
-          status("活跃事件上报成功，但官方 preview 接口返回暂无套餐（可尝试下方直接输入活动 ID 领取）。", "ok");
-        }
+      const curPlan = (acc.plans && acc.plans.length) ? acc.plans[0] : null;
+      if (curPlan) {
+        pname.textContent = curPlan.name || curPlan.plan_id;
+        const grants = (curPlan.grants && curPlan.grants.length) ? curPlan.grants.join(" · ") : (curPlan.description || "");
+        pdesc.textContent = grants || "可领取赠送额度";
       } else {
-        await refreshPlans();
-        status("活动资格已刷新并完成重新检测。", "ok");
+        pname.textContent = DEFAULT_CAMPAIGN_PLAN.name;
+        pdesc.textContent = DEFAULT_CAMPAIGN_PLAN.description + " (大促活动候选)";
       }
-    } catch (e) {
-      status("刷新资格失败：" + e.message, "err");
-    } finally {
-      $("btn-activate").disabled = false;
-    }
-  });
-  $("auto-claim").addEventListener("change", () => {
-    if ($("auto-claim").checked) {
-      localStorage.setItem("omcZcodeClaimAuto", "1");
-      autoStatus("已开启，立即检查…");
-      clearTimeout(autoTimer);
-      void autoCycle();
-    } else {
-      stopAuto("已停止");
-    }
-  });
-  $("btn-reload").addEventListener("click", () => { void loadAuthFiles(); });
-  $("auth-select").addEventListener("change", () => {
-    if ($("auth-select").value) $("auth").value = $("auth-select").value;
-  });
+      pinfo.appendChild(pname);
+      pinfo.appendChild(pdesc);
 
-  resolveConnection();
-  void loadAuthFiles().then(() => {
-    if (localStorage.getItem("omcZcodeClaimAuto") === "1") {
-      $("auto-claim").checked = true;
-      autoStatus("已恢复自动领取，立即检查…");
-      void autoCycle();
+      // 3. Actions
+      const acts = document.createElement("div");
+      acts.className = "row-actions";
+      if (acc.claimed) {
+        const tag = document.createElement("span");
+        tag.className = "claimed-tag";
+        tag.textContent = "已领取";
+        acts.appendChild(tag);
+      } else {
+        const btn = document.createElement("button");
+        btn.className = "primary";
+        btn.textContent = acc.busy ? "领取中…" : "领取";
+        btn.disabled = acc.busy;
+        btn.onclick = () => claimAccount(acc);
+        acts.appendChild(btn);
+      }
+
+      row.appendChild(info);
+      row.appendChild(pinfo);
+      row.appendChild(acts);
+      container.appendChild(row);
     }
+  }
+
+  // Load and refresh all accounts
+  async function loadAndRefreshAll() {
+    const btn = document.getElementById("btn-refresh-all");
+    btn.disabled = true;
+    showStatus("正在拉取账号列表并刷新各账号活动资格…", "info");
+    try {
+      const doc = await apiCall("GET", "/v0/management/auth-files");
+      const files = (doc && Array.isArray(doc.files)) ? doc.files : [];
+      const zfiles = files.filter(f => {
+        const p = String(f.provider || "").toLowerCase();
+        const n = String(f.name || "").toLowerCase();
+        return p.includes("zcode") || n.includes("zcode");
+      });
+
+      accounts = zfiles.map(f => ({
+        name: f.name,
+        label: f.label,
+        email: f.email || f.label,
+        plans: [],
+        busy: false,
+        claimed: false
+      }));
+      renderList();
+
+      if (!accounts.length) {
+        showStatus("未检索到任何 ZCode 账号", "warn");
+        return;
+      }
+
+      // Concurrently/sequentially activate & preview each account
+      let okCount = 0;
+      for (const acc of accounts) {
+        try {
+          const res = await apiCall("POST", `${CLAIM_API}/activate?auth=${encodeURIComponent(acc.name)}`);
+          if (res && Array.isArray(res.plans) && res.plans.length) {
+            acc.plans = res.plans;
+            okCount++;
+          }
+        } catch(_) {}
+        renderList();
+      }
+      showStatus(`活动资格刷新完成！共 ${accounts.length} 个账号，${okCount} 个检索到常规套餐，其余可随时点击领取参与大促。`, "ok", 5000);
+    } catch(e) {
+      showStatus("刷新失败: " + e.message, "err");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // Single account claim
+  async function claimAccount(acc) {
+    acc.busy = true;
+    renderList();
+    showStatus(`正在为「${acc.email || acc.name}」完成验证并领取…`, "info");
+    const targetPlan = (acc.plans && acc.plans.length) ? acc.plans[0].plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
+
+    try {
+      // Direct call auto-claim endpoint which handles verification & claim seamlessly
+      const res = await apiCall("POST", `${CLAIM_API}/auto`, {
+        auth: acc.name,
+        plan_id: targetPlan,
+        activate: true
+      });
+
+      if (res && res.claimed) {
+        acc.claimed = true;
+        showStatus(`「${acc.email || acc.name}」领取成功！`, "ok", 4000);
+      } else {
+        const msg = (res && res.message) || "领取未成功";
+        if (msg.includes("已经领取") || (res && res.code === "1003")) {
+          acc.claimed = true;
+          showStatus(`「${acc.email || acc.name}」已经领取过该套餐。`, "ok", 4000);
+        } else {
+          showStatus(`「${acc.email || acc.name}」: ${msg}`, "warn", 6000);
+        }
+      }
+    } catch(e) {
+      showStatus(`「${acc.email || acc.name}」领取异常: ${e.message}`, "err");
+    } finally {
+      acc.busy = false;
+      renderList();
+    }
+  }
+
+  document.getElementById("btn-refresh-all").addEventListener("click", loadAndRefreshAll);
+
+  // Auto trigger on initial page open
+  window.addEventListener("DOMContentLoaded", () => {
+    loadAndRefreshAll();
   });
 })();
 </script>

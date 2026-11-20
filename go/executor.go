@@ -63,6 +63,7 @@ func setAuthDir(dir string) {
 		riskState.blocked = map[string]bool{}
 	}
 	riskState.Unlock()
+	startAutoClaimDaemon(dir)
 }
 func riskHash(c credential, id string) string {
 	identity := c.Site + "\x00" + c.UID
