@@ -199,7 +199,12 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 		if err != nil {
 			return managementError(0, err), true
 		}
-		return managementJSON(http.StatusOK, map[string]any{"auth": name, "plans": plans}), true
+		bal, _ := fetchBalance(claimSender(), c)
+		return managementJSON(http.StatusOK, map[string]any{
+			"auth":         name,
+			"plans":        plans,
+			"active_plans": bal.Plans,
+		}), true
 
 	case sub == "/diagnose" && req.Method == http.MethodGet:
 		name := req.Query.Get("auth")
@@ -259,7 +264,12 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 			return managementError(0, err), true
 		}
 		plans, _ := previewPlans(claimSender(), c)
-		return managementJSON(http.StatusOK, map[string]any{"activated": true, "plans": plans}), true
+		bal, _ := fetchBalance(claimSender(), c)
+		return managementJSON(http.StatusOK, map[string]any{
+			"activated":    true,
+			"plans":        plans,
+			"active_plans": bal.Plans,
+		}), true
 
 	case sub == "/auto" && req.Method == http.MethodPost:
 		body, err := decodeAutoClaimBody(req.Body)

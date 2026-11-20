@@ -1099,6 +1099,8 @@ func TestClaimFlowManagementAPI(t *testing.T) {
 		switch {
 		case strings.Contains(r.URL, "/billing/preview"):
 			return jsonReply(planJSON), nil
+		case strings.Contains(r.URL, "/billing/balance"):
+			return jsonReply(`{"plans":[]}`), nil
 		case strings.Contains(r.URL, "/client/configs"):
 			return jsonReply(`{"configs":{"captcha":{"enabled":true,"region":"cn","prefix":"zcode","sceneId":"scene-x"}}}`), nil
 		case strings.Contains(r.URL, "/event/report"):
