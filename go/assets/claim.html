@@ -519,10 +519,6 @@
       renderList();
     }
   }
-      acc.busy = false;
-      renderList();
-    }
-  }
 
   document.getElementById("btn-refresh-all").addEventListener("click", loadAndRefreshAll);
   document.getElementById("btn-save-key").addEventListener("click", () => {
@@ -535,9 +531,11 @@
     }
   });
 
-  window.addEventListener("DOMContentLoaded", () => {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadAndRefreshAll);
+  } else {
     loadAndRefreshAll();
-  });
+  }
 })();
 </script>
 </body>
