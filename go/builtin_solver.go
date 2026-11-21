@@ -167,7 +167,7 @@ func runBuiltinCaptchaSolver(sceneID, prefix, region string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("captcha solver failed: %v: %s", err, tail(stderr.String(), 1200))
 		}
-	case <-time.After(3 * time.Minute):
+	case <-time.After(45 * time.Second):
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}

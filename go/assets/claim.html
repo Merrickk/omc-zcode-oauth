@@ -245,8 +245,8 @@
   <div class="empty-state">正在加载账号并检查活动资格…</div>
 </main>
 
-<div id="cap-holder"></div>
-<button id="cap-btn" style="display:none"></button>
+<div id="cap-holder" style="position:fixed;top:-9999px;left:-9999px;opacity:0.01;"></div>
+<button id="cap-btn" style="position:fixed;top:-9999px;left:-9999px;opacity:0.01;"></button>
 
 <script>
 (function() {
@@ -529,34 +529,32 @@
   async function claimAccount(acc, planId) {
     acc.busy = true;
     acc.error = "";
-    acc.msg = "正在领取…";
+    acc.msg = "正在验证并领取…";
     renderList();
     showStatus(`正在为「${acc.email || acc.name}」完成验证并领取套餐…`, "info");
 
     try {
-      // 1. Try backend automated solver first
-      let res = await apiCall("POST", `${CLAIM_API}/auto`, {
-        auth: acc.name,
-        plan_id: planId,
-        activate: true
-      }).catch(e => ({ claimed: false, message: e.message }));
+      if (!captchaCfg) {
+        captchaCfg = await apiCall("GET", `${CLAIM_API}/captcha-config`);
+      }
 
-      // 2. If server host lacks Node/Chromium runtime, fallback to in-browser silent verification
-      if (!res || (!res.claimed && res.message && (res.message.includes("requires node on PATH") || res.message.includes("Chromium binary") || res.message.includes("requires")))) {
-        acc.msg = "服务器未装无头浏览器，切换本地无感验证…";
-        renderList();
-        if (!captchaCfg) {
-          captchaCfg = await apiCall("GET", `${CLAIM_API}/captcha-config`);
-        }
-        if (captchaCfg && (captchaCfg.enabled !== false)) {
-          const param = await getBrowserCaptcha(captchaCfg);
-          res = await apiCall("POST", `${CLAIM_API}/claim`, {
-            auth: acc.name,
-            plan_id: planId,
-            captcha_param: param,
-            captcha_region: captchaCfg.region || "cn"
-          });
-        }
+      let res = null;
+      // 1. Prioritize in-browser silent verification: runs in 0.3s, zero server dependency
+      try {
+        const param = await getBrowserCaptcha(captchaCfg);
+        res = await apiCall("POST", `${CLAIM_API}/claim`, {
+          auth: acc.name,
+          plan_id: planId,
+          captcha_param: param,
+          captcha_region: (captchaCfg && captchaCfg.region) || "cn"
+        });
+      } catch (eBrowser) {
+        // Fallback to server auto solver if browser script blocked
+        res = await apiCall("POST", `${CLAIM_API}/auto`, {
+          auth: acc.name,
+          plan_id: planId,
+          activate: true
+        });
       }
 
       if (res && (res.claimed || res.code === "0")) {
