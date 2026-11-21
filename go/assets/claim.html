@@ -173,6 +173,17 @@
   }
   .plan-name.active { color: #3fb950; }
   .plan-name.claimable { color: #58a6ff; }
+  .plan-input {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    color: #58a6ff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    width: 100%;
+    max-width: 280px;
+  }
   .plan-desc {
     font-size: 12px;
     color: var(--text-muted);
@@ -222,7 +233,7 @@
 
 <header>
   <div class="title-group">
-    <h1>活动领取 <span style="font-size:12px;opacity:0.75;font-weight:normal;color:#58a6ff;">v0.4.16</span></h1>
+    <h1>活动领取 <span style="font-size:12px;opacity:0.75;font-weight:normal;color:#58a6ff;">v0.4.17</span></h1>
     <span class="badge" title="后台每隔 30 分钟自动为所有账号上报心跳并巡检领取">后台 30m 自动巡检中</span>
   </div>
   <div class="actions">
@@ -416,22 +427,26 @@
       const pdesc = document.createElement("div");
       pdesc.className = "plan-desc";
 
-      const curPlan = (acc.plans && acc.plans.length) ? acc.plans[0] : null;
-      const activePlan = (acc.active_plans && acc.active_plans.length) ? acc.active_plans[0] : null;
+      const curPlan = (Array.isArray(acc.plans) && acc.plans.length > 0) ? acc.plans[0] : null;
+      const activePlan = (Array.isArray(acc.active_plans) && acc.active_plans.length > 0) ? acc.active_plans[0] : null;
 
       if (activePlan) {
         pname.className = "plan-name active";
         pname.textContent = activePlan.name || activePlan.plan_id;
         pdesc.textContent = "套餐已领取（已生效）";
-      } else if (curPlan) {
-        pname.className = "plan-name claimable";
-        pname.textContent = curPlan.name || curPlan.plan_id;
-        const grants = (curPlan.grants && curPlan.grants.length) ? curPlan.grants.join(" · ") : (curPlan.description || "");
-        pdesc.textContent = grants || "待领取";
       } else {
         pname.className = "plan-name claimable";
-        pname.textContent = DEFAULT_CAMPAIGN_PLAN.name;
-        pdesc.textContent = DEFAULT_CAMPAIGN_PLAN.description + "（待领取）";
+        const defaultId = curPlan ? curPlan.plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
+        const displayName = curPlan ? (curPlan.name || curPlan.plan_id) : DEFAULT_CAMPAIGN_PLAN.name;
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.className = "plan-input";
+        inp.value = acc.customPlanId || defaultId;
+        inp.placeholder = "活动 Plan ID";
+        inp.title = "支持指定或修改活动 Plan ID 进行强领";
+        inp.onchange = (e) => { acc.customPlanId = e.target.value.trim(); };
+        pname.appendChild(inp);
+        pdesc.textContent = `${displayName}（可直接修改 ID 强领）`;
       }
       pinfo.appendChild(pname);
       pinfo.appendChild(pdesc);
@@ -449,8 +464,8 @@
         btn.className = "primary";
         btn.textContent = acc.busy ? "领取中…" : "领取";
         btn.disabled = acc.busy;
-        const targetPid = curPlan ? curPlan.plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
-        btn.onclick = () => claimAccount(acc, targetPid);
+        const defaultId = curPlan ? curPlan.plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
+        btn.onclick = () => claimAccount(acc, acc.customPlanId || defaultId);
         acts.appendChild(btn);
       }
 
@@ -496,8 +511,8 @@
         try {
           const res = await apiCall("POST", `${CLAIM_API}/activate?auth=${encodeURIComponent(acc.name)}`);
           if (res) {
-            acc.plans = res.plans || [];
-            acc.active_plans = res.active_plans || [];
+            acc.plans = Array.isArray(res.plans) ? res.plans : [];
+            acc.active_plans = Array.isArray(res.active_plans) ? res.active_plans : [];
             if (acc.active_plans.length) {
               acc.claimed = true;
             }
