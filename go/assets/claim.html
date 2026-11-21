@@ -374,16 +374,16 @@
       if (activePlan) {
         pname.className = "plan-name active";
         pname.textContent = activePlan.name || activePlan.plan_id;
-        pdesc.textContent = "当前套餐已生效中（无需重复领取）";
+        pdesc.textContent = "套餐已领取（已生效）";
       } else if (curPlan) {
         pname.className = "plan-name claimable";
         pname.textContent = curPlan.name || curPlan.plan_id;
         const grants = (curPlan.grants && curPlan.grants.length) ? curPlan.grants.join(" · ") : (curPlan.description || "");
-        pdesc.textContent = grants || "有活动额度可领取";
+        pdesc.textContent = grants || "待领取";
       } else {
-        pname.className = "plan-name none";
-        pname.textContent = "暂无可领活动";
-        pdesc.textContent = "官方当前未对该账号下发活动，可点击右侧强制尝试";
+        pname.className = "plan-name claimable";
+        pname.textContent = DEFAULT_CAMPAIGN_PLAN.name;
+        pdesc.textContent = DEFAULT_CAMPAIGN_PLAN.description + "（待领取）";
       }
       pinfo.appendChild(pname);
       pinfo.appendChild(pdesc);
@@ -394,21 +394,15 @@
       if (activePlan || acc.claimed) {
         const tag = document.createElement("span");
         tag.className = "claimed-tag";
-        tag.textContent = "已生效";
+        tag.textContent = "已领取";
         acts.appendChild(tag);
-      } else if (curPlan) {
+      } else {
         const btn = document.createElement("button");
         btn.className = "primary";
         btn.textContent = acc.busy ? "领取中…" : "领取";
         btn.disabled = acc.busy;
-        btn.onclick = () => claimAccount(acc, curPlan.plan_id);
-        acts.appendChild(btn);
-      } else {
-        const btn = document.createElement("button");
-        btn.className = "subtle";
-        btn.textContent = acc.busy ? "领取中…" : "尝试领取大促";
-        btn.disabled = acc.busy;
-        btn.onclick = () => claimAccount(acc, DEFAULT_CAMPAIGN_PLAN.plan_id);
+        const targetPid = curPlan ? curPlan.plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
+        btn.onclick = () => claimAccount(acc, targetPid);
         acts.appendChild(btn);
       }
 
