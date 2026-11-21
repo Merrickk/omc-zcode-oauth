@@ -22,6 +22,7 @@ const (
 	balanceURL        = zcodeRoot + "/api/v1/zcode-plan/billing/balance"
 	clientConfigsURL  = zcodeRoot + "/api/v1/client/configs"
 	eventReportURL    = zcodeRoot + "/api/v1/event/report"
+	marketingTouchURL = zcodeRoot + "/api/v1/marketing/touch"
 )
 
 type claimGrant struct {
@@ -157,19 +158,68 @@ func previewPlans(sender httpSender, c credential) ([]claimPlan, error) {
 	if c.JWT == "" {
 		return nil, errors.New("ZCode sign-in required")
 	}
-	// zcode-switch's claim_token sends zcodejwttoken as-is and lets the server
-	// decide validity. Rejecting locally on exp would drop accounts that the
-	// vendor still accepts (clock skew, non-expiring billing tokens), which is
-	// why the desktop tool saw plans while the plugin reported none.
 	target := billingPreviewURL + "?" + url.Values{
 		"app_version": {getConfig().AppVersion},
 		"platform":    {zcodePlatform()},
 	}.Encode()
 	data, body, err := apiCallEnvelope(sender, "GET", target, "Bearer "+c.JWT, c.Device, billingHeaders(c.JWT), nil)
+	if err == nil {
+		if plans, _ := plansFromRaw(payloadOrEnvelope(data, body)); len(plans) > 0 {
+			return plans, nil
+		}
+	}
+	// Fallback to marketing channel (matching zcode-switch v1.7.1)
+	if mplans, _ := previewFromMarketing(sender, c); len(mplans) > 0 {
+		return mplans, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	return plansFromRaw(payloadOrEnvelope(data, body))
+}
+
+func previewFromMarketing(sender httpSender, c credential) ([]claimPlan, error) {
+	data, body, err := apiCallEnvelope(sender, "GET", marketingTouchURL, "Bearer "+c.JWT, c.Device, billingHeaders(c.JWT), nil)
+	if err != nil {
+		return nil, nil
+	}
+	var root any
+	raw := payloadOrEnvelope(data, body)
+	if json.Unmarshal(raw, &root) != nil {
+		return nil, nil
+	}
+	var found []claimPlan
+	var walk func(any)
+	walk = func(v any) {
+		switch node := v.(type) {
+		case map[string]any:
+			if zp, ok := node["zcode_plan"].(map[string]any); ok {
+				if b, err := json.Marshal(zp); err == nil {
+					if parsed, _ := plansFromRaw(b); len(parsed) > 0 {
+						found = append(found, parsed...)
+						return
+					}
+				}
+			}
+			if pid, ok := node["plan_id"].(string); ok && pid != "" {
+				if b, err := json.Marshal(node); err == nil {
+					if parsed, _ := plansFromRaw(b); len(parsed) > 0 {
+						found = append(found, parsed...)
+						return
+					}
+				}
+			}
+			for _, val := range node {
+				walk(val)
+			}
+		case []any:
+			for _, item := range node {
+				walk(item)
+			}
+		}
+	}
+	walk(root)
+	return found, nil
 }
 
 func plansFromRaw(raw json.RawMessage) ([]claimPlan, error) {

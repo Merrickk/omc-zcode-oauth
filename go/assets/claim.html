@@ -233,7 +233,7 @@
 
 <header>
   <div class="title-group">
-    <h1>活动领取 <span style="font-size:12px;opacity:0.75;font-weight:normal;color:#58a6ff;">v0.4.17</span></h1>
+    <h1>活动领取 <span style="font-size:12px;opacity:0.75;font-weight:normal;color:#58a6ff;">v0.4.18</span></h1>
     <span class="badge" title="后台每隔 30 分钟自动为所有账号上报心跳并巡检领取">后台 30m 自动巡检中</span>
   </div>
   <div class="actions">
@@ -434,19 +434,15 @@
         pname.className = "plan-name active";
         pname.textContent = activePlan.name || activePlan.plan_id;
         pdesc.textContent = "套餐已领取（已生效）";
-      } else {
+      } else if (curPlan) {
         pname.className = "plan-name claimable";
-        const defaultId = curPlan ? curPlan.plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
-        const displayName = curPlan ? (curPlan.name || curPlan.plan_id) : DEFAULT_CAMPAIGN_PLAN.name;
-        const inp = document.createElement("input");
-        inp.type = "text";
-        inp.className = "plan-input";
-        inp.value = acc.customPlanId || defaultId;
-        inp.placeholder = "活动 Plan ID";
-        inp.title = "支持指定或修改活动 Plan ID 进行强领";
-        inp.onchange = (e) => { acc.customPlanId = e.target.value.trim(); };
-        pname.appendChild(inp);
-        pdesc.textContent = `${displayName}（可直接修改 ID 强领）`;
+        pname.textContent = curPlan.name || curPlan.plan_id;
+        const grants = (Array.isArray(curPlan.grants) && curPlan.grants.length) ? curPlan.grants.join(" · ") : (curPlan.description || "");
+        pdesc.textContent = grants || "可领取活动套餐";
+      } else {
+        pname.className = "plan-name none";
+        pname.textContent = "暂无可领活动";
+        pdesc.textContent = "当前官方活动接口未下发待领套餐";
       }
       pinfo.appendChild(pname);
       pinfo.appendChild(pdesc);
@@ -457,16 +453,20 @@
       if (activePlan || acc.claimed) {
         const tag = document.createElement("span");
         tag.className = "claimed-tag";
-        tag.textContent = "已领取";
+        tag.textContent = "已生效";
         acts.appendChild(tag);
-      } else {
+      } else if (curPlan) {
         const btn = document.createElement("button");
         btn.className = "primary";
         btn.textContent = acc.busy ? "领取中…" : "领取";
         btn.disabled = acc.busy;
-        const defaultId = curPlan ? curPlan.plan_id : DEFAULT_CAMPAIGN_PLAN.plan_id;
-        btn.onclick = () => claimAccount(acc, acc.customPlanId || defaultId);
+        btn.onclick = () => claimAccount(acc, curPlan.plan_id);
         acts.appendChild(btn);
+      } else {
+        const none = document.createElement("span");
+        none.className = "account-file";
+        none.textContent = "-";
+        acts.appendChild(none);
       }
 
       row.appendChild(info);
