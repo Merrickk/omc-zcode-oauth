@@ -69,23 +69,23 @@ func claimFailureMessage(code string, msg string) string {
 	var base string
 	switch code {
 	case "1001":
-		base = "plan does not exist"
+		base = "套餐不存在"
 	case "1002":
-		base = "the event has ended or the plan is not claimable yet"
+		base = "活动已结束或未到领取时间"
 	case "1003":
-		base = "this plan was already claimed"
+		base = "已领取过该套餐（已生效）"
 	case "1004":
-		base = "the account does not meet the claim conditions"
+		base = "当前账号暂不满足该套餐的领取条件"
 	case "1005":
-		base = "daily claim limit reached"
+		base = "今日领取次数已达上限"
 	case "3001":
-		base = "invalid claim parameters; refresh and retry"
+		base = "参数错误，请刷新重试"
 	case "3007":
-		base = "captcha verification failed; retry"
+		base = "验证码校验失败，请重试"
 	case "401":
-		base = "sign in before claiming"
+		base = "登录已失效，请重新登录"
 	default:
-		base = "claim failed"
+		base = "领取失败"
 	}
 	if msg != "" {
 		return base + " (" + msg + ")"

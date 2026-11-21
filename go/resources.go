@@ -302,20 +302,28 @@ func handleClaimAPI(req pluginapi.ManagementRequest) (pluginapi.ManagementRespon
 		if err != nil {
 			return managementError(http.StatusBadRequest, err), true
 		}
+		c, err = credentialWithVirtualDevice(dir, name, c)
+		if err != nil {
+			return managementError(http.StatusBadRequest, err), true
+		}
 		unlock := claimLock(name)
 		defer unlock()
 		outcome, err := submitClaim(claimSender(), c, strings.TrimSpace(body.PlanID), body.CaptchaParam, body.CaptchaRegion)
 		if err != nil {
-			resp := managementError(0, err)
-			// The structured outcome rides alongside the error text so a panel
-			// can read the business code and the next-claim timestamp.
-			if enriched, jerr := json.Marshal(map[string]any{
+			if strings.Contains(err.Error(), "captcha verification parameter is required") {
+				return managementError(http.StatusBadRequest, err), true
+			}
+			msg := err.Error()
+			if outcome.Message != "" {
+				msg = outcome.Message
+			}
+			return managementJSON(http.StatusOK, map[string]any{
+				"claimed": false,
+				"code":    outcome.Code,
+				"message": msg,
 				"error":   err.Error(),
 				"outcome": outcome,
-			}); jerr == nil {
-				resp.Body = enriched
-			}
-			return resp, true
+			}), true
 		}
 		return managementJSON(http.StatusOK, outcome), true
 	}
