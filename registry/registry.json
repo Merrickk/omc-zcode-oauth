@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "plugins": [
     {
       "id": "omc-zcode-oauth",
@@ -27,6 +27,60 @@
       "install": {
         "type": "github-release"
       }
+    },
+    {
+      "id": "omc-qbs-relay",
+      "name": "OMC QBS Relay",
+      "description": "Multi-account Amazon Quick / QBS Relay provider for CLIProxyAPI and Oh-My-CPA.",
+      "author": "Merrickk",
+      "version": "0.1.0",
+      "repository": "https://github.com/Merrickk/omc-qbs-relay",
+      "logo": "https://raw.githubusercontent.com/Merrickk/omc-qbs-relay/main/assets/logo.png",
+      "homepage": "https://github.com/Merrickk/omc-qbs-relay",
+      "license": "MIT",
+      "tags": [
+        "Provider",
+        "MultiAccount",
+        "RoundRobin",
+        "AWS",
+        "Quick",
+        "QBS",
+        "OMC"
+      ],
+      "locales": {
+        "zh-CN": {
+          "description": "适用于 CLIProxyAPI / Oh-My-CPA 的多账号 Amazon Quick / QBS Relay 提供商插件。每个 Quick 会话生成一个独立 CPA 账号，自动注册到 qbs-upstream 并轮询调用。"
+        }
+      },
+      "install": {
+        "type": "direct",
+        "artifacts": [
+          {
+            "goos": "linux",
+            "goarch": "amd64",
+            "url": "https://raw.githubusercontent.com/Merrickk/omc-qbs-relay/main/dist/omc-qbs-relay_0.1.0_linux_amd64.zip",
+            "sha256": "d6c51eadcc014221ead70bc96b9592afc2dc509f538c2adc176552ceb7c06052",
+            "size": 1924428
+          }
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "install": {
+            "type": "direct",
+            "artifacts": [
+              {
+                "goos": "linux",
+                "goarch": "amd64",
+                "url": "https://raw.githubusercontent.com/Merrickk/omc-qbs-relay/main/dist/omc-qbs-relay_0.1.0_linux_amd64.zip",
+                "sha256": "d6c51eadcc014221ead70bc96b9592afc2dc509f538c2adc176552ceb7c06052",
+                "size": 1924428
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
